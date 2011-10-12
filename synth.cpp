@@ -18,13 +18,88 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <cstring>
+#include <cassert>
 #include <math.h>
 
 #include <vector>
 #include <iostream>
-
+#include <algorithm>
 #include <jack/jack.h>
 
+
+namespace fast {
+// fast sin/cos.
+// shamelessly ripped from http://www.flipcode.com/archives/Fast_Trigonometry_Functions_Using_Lookup_Tables.shtml
+    
+const static int MAX_CIRCLE_ANGLE = 512;
+const static int HALF_MAX_CIRCLE_ANGLE = MAX_CIRCLE_ANGLE / 2;
+const static int QUARTER_MAX_CIRCLE_ANGLE  = MAX_CIRCLE_ANGLE / 4;
+const static int MASK_MAX_CIRCLE_ANGLE = MAX_CIRCLE_ANGLE - 1;
+const float PI = 3.14159265358979323846f;
+
+static float fast_cossin_table[MAX_CIRCLE_ANGLE];           // Declare table of fast cosinus and sinus
+
+// Copied from NVidia web site
+inline void FloatToInt(int *int_pointer, float f) 
+{
+//     __asm  fld  f
+//   __asm  mov  edx,int_pointer
+//   __asm  FRNDINT
+//   __asm  fistp dword ptr [edx];
+    *int_pointer = f;
+
+}
+
+inline float cos(float n)
+{
+   float f = n * HALF_MAX_CIRCLE_ANGLE / PI;
+   int i;
+   FloatToInt(&i, f);
+   if (i < 0)
+   {
+      return fast_cossin_table[((-i) + QUARTER_MAX_CIRCLE_ANGLE)&MASK_MAX_CIRCLE_ANGLE];
+   }
+   else
+   {
+      return fast_cossin_table[(i + QUARTER_MAX_CIRCLE_ANGLE)&MASK_MAX_CIRCLE_ANGLE];
+   }
+
+   assert(0);
+}
+
+inline float sin(float n)
+{
+   float f = n * HALF_MAX_CIRCLE_ANGLE / PI;
+   int i;
+   
+   FloatToInt(&i, f);
+   
+//    std::cout << "f: " << f << " " << i << "\n";
+   
+   float v;
+   if (i < 0)
+   {
+      v = fast_cossin_table[(-((-i)&MASK_MAX_CIRCLE_ANGLE)) + MAX_CIRCLE_ANGLE];
+   }
+   else
+   {
+      v = fast_cossin_table[i&MASK_MAX_CIRCLE_ANGLE];
+   }
+
+//    std::cout << "sin: " << n << " " << v << " " << ::sin(n) << "\n";
+//    assert(0);
+   
+   return v;
+}
+  
+void init() {
+    for ( int i = 0 ; i < MAX_CIRCLE_ANGLE ; i++)
+    {
+        fast_cossin_table[i] = (float)::sin((double)i * PI / HALF_MAX_CIRCLE_ANGLE);
+    }
+}
+    
+};
 
 
 jack_port_t *input_port;
@@ -47,7 +122,7 @@ public:
         
         for( int i = 0; i < nframes; ++i ) {
          
-            buf[i] += m_gain * sin( (i + m_per) / spp * (2 * 3.1415) );
+            buf[i] += m_gain * fast::sin( (i + m_per) / spp * (2 * 3.1415) );
         }
         
         m_per += nframes;
@@ -111,13 +186,14 @@ void init_osc() {
     
     float gain = 0.5;
     
-    for( int i = 1; i < 20; i += 1 ) {
+    for( int i = 1; i < 40; i += 1 ) {
             
         
-        
+        gain = std::max(0.0f,gain);
         oscs.push_back( osc_sin( base_freq * i, gain )); 
     
-        gain *= 0.6;
+        std::cout << "gain: " << base_freq * i << " " << gain << "\n"; 
+        gain *= 0.70;
     }
     
 }
@@ -130,6 +206,8 @@ main (int argc, char *argv[])
     const char *server_name = NULL;
     jack_options_t options = JackNullOption;
     jack_status_t status;
+    
+    fast::init();
     
     /* open a client connection to the JACK server */
 
