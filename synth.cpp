@@ -114,15 +114,22 @@ class osc_sin {
     int m_per;
     const static int rate = 44100; 
     float m_gain;
+    bool m_invert;
 public:
-    osc_sin( float freq, float gain ) : m_freq(freq), m_per(0), m_gain(gain) {}
+    osc_sin( float freq, float gain, bool invert ) 
+    : m_freq(freq), m_per(0), m_gain(gain), m_invert(invert) {}
     
     void render( sample_t *buf, int nframes ) {
         float spp = rate / m_freq;
         
         for( int i = 0; i < nframes; ++i ) {
-         
-            buf[i] += m_gain * fast::sin( (i + m_per) / spp * (2 * 3.1415) );
+            float v = m_gain * fast::sin( (i + m_per) / spp * (2 * 3.1415) );
+            
+            if( false && m_invert ) {
+                buf[i] -= v;
+            } else {
+                buf[i] += v;
+            }
         }
         
         m_per += nframes;
@@ -138,9 +145,53 @@ public:
     
 };
 
+
+class osc_sin_harm {
+    float m_base_freq;
+    int m_per;
+    const static int rate = 44100; 
+    float m_base_gain;
+    float m_attn;
+    float m_harm;
+public:
+    osc_sin_harm( float freq, float gain, float attn, float harm ) 
+    : m_base_freq(freq), m_per(0), m_base_gain(gain), m_attn(attn), m_harm(harm) {}
+    
+    
+    void render( sample_t *buf, int nframes ) {
+            
+        for( int h = 1; h < 20; h += m_harm ) {
+            
+            float freq = m_base_freq * h;
+            float spp = rate / freq;
+            std::cout << "freq: " << h << " " << freq << " " << spp << "\n";
+        
+            for( int i = 0; i < nframes; ++i ) {
+        
+                buf[i] += (m_base_gain / pow(h,m_attn)) * fast::sin( (i + m_per) / spp * (2 * 3.1415) );
+                
+//                 buf[i] += 0.5 * fast::sin( (i + m_per) / spp * (2 * 3.1415) );
+            }    
+            
+        }
+        
+        m_per += nframes;
+        
+        //std::cout << "render: " << m_freq << "\n";
+        
+//         if( m_per > spp ) {
+//             m_per -= spp;
+//         }
+//         
+    }
+
+
+    
+};
+
 //static osc_sin osc1(440);
 
-std::vector<osc_sin> oscs;
+std::vector<osc_sin_harm> oscs;
 
 /**
  * The process callback for this JACK application is called in a
@@ -161,11 +212,16 @@ int process (jack_nframes_t nframes, void *arg)
 
 //     osc1.render(out, nframes);
     
-    for( osc_sin & osc : oscs ) {
-     
+    for( auto &osc : oscs ) {
         osc.render( out, nframes );
     }
-    
+//     
+//     std::for_each(oscs.begin(), oscs.end(), [&]( osc_sin_harm &osc ) {
+//         osc.render( out, nframes );
+//         
+//     }
+//     );
+//     
     return 0;      
 }
 
@@ -182,19 +238,23 @@ jack_shutdown (void *arg)
 
 void init_osc() {
  
-    int base_freq = 200;
+    int base_freq = 440;
+
+    oscs.push_back(osc_sin_harm(base_freq, 0.5, 1, 1));
     
-    float gain = 0.5;
-    
-    for( int i = 1; i < 40; i += 1 ) {
-            
-        
-        gain = std::max(0.0f,gain);
-        oscs.push_back( osc_sin( base_freq * i, gain )); 
-    
-        std::cout << "gain: " << base_freq * i << " " << gain << "\n"; 
-        gain *= 0.70;
-    }
+// //     float gain = 0.5;
+//     
+//     for( int i = 1; i < 40; i += 2 ) {
+//             
+//         
+// //         gain = std::max(0.0f,gain);
+//         float gain = 1/pow(i,1.0);
+//         
+//         oscs.push_back( osc_sin( base_freq * i, gain, i % 2 == 0 )); 
+//     
+//         std::cout << "gain: " << base_freq * i << " " << gain << "\n"; 
+// //         gain *= 0.70;
+//     }
     
 }
 
