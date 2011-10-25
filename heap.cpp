@@ -22,7 +22,7 @@
 #include <iterator>
 #include <typeinfo>
 #include <memory>
-
+#if 0
 //int pop() {
 //
 //	int f = 0;
@@ -346,7 +346,7 @@ struct heap_int {
 
 
 	inline void set_pos(size_t pos_) const {
-		*ptr = int(pos_);
+		*(ptr.get()) = int(pos_);
 	}
 
 	inline size_t get_pos() const {
@@ -427,7 +427,7 @@ int main() {
 		trans_heap<heap_int>::trans tr(&th);
 
 		for( int v : z ) {
-			th.push(heap_int(std::rand() % 5, new int));
+			th.push(std::rand() % 5);
 		}
 
 		//tr.commit();
@@ -444,7 +444,7 @@ int main() {
 				int v = th.get_vec()[r].v;
 				v+=5;
 
-				th.modify(heap_int(v, new int), r);
+				th.modify(heap_int(v), r);
 				th.print();
 
 				for( int j = 0; j < 5; j++ ) {
@@ -513,3 +513,9 @@ int main() {
 //		assert(std::is_heap(w.begin(), w.end(), comp));
 //	}
 }
+#else
+int main() {
+	return 0;
+}
+
+#endif
