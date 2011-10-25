@@ -71,19 +71,20 @@ public:
 		node() : null_(true), is_term_(false), term_(-1), prod_("null") {}
 
 		bool is_terminal() const {
-			assert( is_term() );
-			assert( !is_null() );
+
+
 			return is_term_;
 		}
 
 		int get_terminal() const {
+			assert( !is_null() );
 			assert( is_terminal() );
 			return term_;
 		}
 
 		const std::vector<node> &get_list() const {
 
-			assert( !is_term() );
+			assert( !is_terminal() );
 			assert( !is_null() );
 			return *this;
 		}
