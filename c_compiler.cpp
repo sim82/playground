@@ -70,6 +70,10 @@ public:
 		return *this;
 	}
 
+	const_type get_type() const {
+		return type_;
+	}
+
 	const char *type_name( const_type t ) {
 		switch( t ) {
 		case const_type::integer:
@@ -124,8 +128,37 @@ public:
         keywords_ = {"auto","break","case","char","continue","default","do","double","else","entry","enum","extern","float","for","goto","if","int","long","legister","return","short","sizeof","static","struct","switch","typdef","union","unsigned","void","while"};
         std::sort( keywords_.begin(), keywords_.end() ); // just to make sure...
         
+        // if i'm not wrong, then every non empty prefix of a separator is also a separator (=i.e., something like a trie),
+        // so the longest separators can be easily transformed into a prefix array for fast lookup.
+        // pure genius, Mr. Ritchie!
+        auto sep_raw = {
+        	"<<=", ">>=",
+        	"++", "--", "+=", "-=", "*=", "/=", "%=", "!=", "==", ">=", "<=", "^=",
+        	"||", "&&",
+        	".", ",", "->", "(", ")", "[", "]", "{", "}", "?", ":", ";"
+        };
+
+        // ok, this looks kind of dorky compared to an unordered_set, but I think, when you write a k&r c compiler, you should prefer sorted arrays+binary search to the modern stuff.
+        for( const std::string &s : sep_raw ) {
+			auto it = s.end();
+			while( it != s.begin() ) {
+				sep_.push_back( std::string(s.begin(), it) );
+				--it;
+			}
+
+        }
+        std::sort( sep_.begin(), sep_.end() );
+        sep_.erase(std::unique( sep_.begin(), sep_.end() ), sep_.end() );
+
+        std::copy( sep_.begin(), sep_.end(), std::ostream_iterator<std::string>(std::cout, "\n" ));
+
+
     }
     
+    bool is_separator( const std::string & s ) {
+    	return std::binary_search(sep_.begin(), sep_.end(), s );
+    }
+
     inline bool is_keyword( const std::string &s ) {
      
         return std::binary_search( keywords_.begin(), keywords_.end(), s );
@@ -141,6 +174,26 @@ public:
     	}
     }
     
+    static char translate_escape( char cc ) {
+    	switch( cc ) {
+		case 'n':
+			return '\n';
+		case 'r':
+			return '\r';
+		case 't':
+			return '\t';
+		case '0':
+			return '\0';
+		case '\\':
+		case '\'':
+		case '\"':
+			return cc;
+		default:
+			std::cerr << "bad: " << int(cc) << "\n";
+			throw std::runtime_error( "unknown escape char");
+		}
+    }
+
     shared_ptr<lex::token> next() {
      
     	using namespace lex;
@@ -149,17 +202,33 @@ public:
          
             return shared_ptr<token>(nullptr);
         }
-        
-        while( isspace(*start_) ) {
-         
-            start_++;
-            
-            if( start_ == end_ ) {
-             
-                return shared_ptr<token>();
-            }
+
+        while( true ) {
+			while( isspace(*start_) ) {
+
+				++start_;
+
+				if( start_ == end_ ) {
+
+					return shared_ptr<token>();
+				}
+			}
+
+			if( *start_ == '#' ) {
+				++start_;
+				while( start_ != end_ ) {
+//					std::cout << "skip: " << *start_ << "\n";
+					if( *start_ == '\n' ) {
+
+						++start_;
+						break;
+					}
+					++start_;
+				}
+			} else {
+				break;
+			}
         }
-        
         char c = *start_;
         
         assert( !isspace(c) );
@@ -192,7 +261,15 @@ public:
 
         	char cc = *start_;
 
-        	assert( cc != '\\' ); // fix escapes later...
+        	bool is_escape = false;
+        	//assert( cc != '\\' ); // fix escapes later...
+        	if( cc == '\\' ) {
+        		is_escape = true;
+        		++start_;
+        		check_not_end();
+
+        		cc = *start_;
+        	}
         	++start_;
 
         	check_not_end();
@@ -201,6 +278,10 @@ public:
         	}
 
         	++start_;
+
+        	if( is_escape ) {
+        		cc = translate_escape(cc);
+        	}
 
         	return std::make_shared<constant>(cc);
         } else if( isdigit(c)) {
@@ -228,7 +309,21 @@ public:
 
 
         	while( *start_ != '"' ) {
-        		s.push_back(*start_);
+        		bool is_escape = false;
+				//assert( cc != '\\' ); // fix escapes later...
+				if( *start_ == '\\' ) {
+					is_escape = true;
+					++start_;
+					check_not_end();
+
+
+				}
+
+				if( is_escape ) {
+					s.push_back(translate_escape(*start_));
+				} else {
+					s.push_back(*start_);
+				}
 
         		++start_;
         		check_not_end();
@@ -238,27 +333,30 @@ public:
 
         	return std::make_shared<constant>( s, constant::const_type::string );
         } else {
-        	std::string s;
-        	s.push_back(c);
 
-        	++start_;
-//
-//			while( start_ != end_ ) {
-//				char c = *start_;
-//
-//				// TODO: what about '.'?!
-//
-//				if( is_letter(c) || isdigit(c) || c == '"' || c == '\'' || isspace(c) ) {
-//					break;
-//				}
-//				s.push_back(c);
-//
-//				++start_;
-//
-//
-//
-//			}
-			return std::make_shared<other>( s );
+        	std::string s;
+
+
+			while( start_ != end_ ) {
+				s.push_back(*start_);
+
+				if( !is_separator( s )) {
+					assert( !s.empty() );
+
+					s.erase( s.end() - 1 );
+					break;
+				}
+
+				++start_;
+			}
+
+			if( s.empty()) {
+				throw std::runtime_error( "unparsable char" );
+			} else {
+				return std::make_shared<other>(s);
+			}
+
+		//	return std::make_shared<other>( s );
 
         }
         return shared_ptr<token>(nullptr);
@@ -275,13 +373,17 @@ private:
     iiter start_;
     iiter end_;
     std::vector<std::string> keywords_;
+    std::vector<std::string> sep_;
 };
 
-class token_buffer : private std::vector<std::shared_ptr<lex::token> > {
+class token_stream : private std::vector<std::shared_ptr<lex::token> > {
 
 public:
+	friend class ts_trans;
+
+
 	template<typename iiter>
-	token_buffer( lexer<iiter> * l ) {
+	token_stream( lexer<iiter> * l ) {
 		while( true ) {
 			auto tok = l->next();
 
@@ -289,7 +391,7 @@ public:
 				break;
 			}
 
-			std::cout << "add: " << *tok << "\n";
+			//std::cout << "add: " << *tok << "\n";
 
 			push_back( tok );
 		}
@@ -301,9 +403,53 @@ public:
 	using base_type::begin;
 	using base_type::end;
 
+	std::shared_ptr<lex::token> get_and_next() {
+		assert( current_ != end() );
+		return *(current_++);
+	}
+
+	std::shared_ptr<lex::token> get() {
+		assert( current_ != end() );
+		return *current_;
+	}
+
+	void next() {
+		++current_;
+	}
+
+
+	bool end_of_input() {
+		return current_ < end();
+	}
+
 
 private:
 
+	iterator current_;
+};
+
+class ts_trans {
+
+public:
+	ts_trans( token_stream * ts ) : ts_(ts), iter_(ts->current_), commit_(false)
+	{
+
+	}
+
+	~ts_trans() {
+		if( !commit_ ) {
+			ts_->current_ = iter_;
+		}
+	}
+
+	inline void commit() {
+		commit_ = true;
+	}
+
+private:
+	token_stream *ts_;
+	token_stream::iterator iter_;
+	bool commit_;
 };
 
 std::ostream &operator<<( std::ostream &os, lex::token &t ) {
@@ -312,9 +458,322 @@ std::ostream &operator<<( std::ostream &os, lex::token &t ) {
 	return os;
 }
 
+template<typename T1, typename T2>
+inline bool isa( T2 * ptr ) {
+    return typeid(*ptr) == typeid(T1);
+}
+
+
+// TODO: is this a good idea? the pointer version above should win if appropriate
+template<typename T1, typename T2>
+inline bool isa( T2 & ref ) {
+    return typeid(ref) == typeid(T1);
+}
+
+
+class parser {
+public:
+	typedef std::shared_ptr<lex::token> lex_token;
+
+	class node : private std::vector<node> {
+	public:
+		node( lex_token tok ) : null_(false), is_term_(true), term_(tok), prod_("term") {}
+
+		node( const std::vector<node> &l, const char *prod ) : std::vector<node>(l), null_(false), is_term_(false), term_(0), prod_(prod) {}
+
+		node() : null_(true), is_term_(false), term_(0), prod_("null") {}
+
+		bool is_terminal() const {
+
+
+			return is_term_;
+		}
+
+		lex_token get_terminal() const {
+			assert( !is_null() );
+			assert( is_terminal() );
+			return term_;
+		}
+
+		const std::vector<node> &get_list() const {
+
+			assert( !is_terminal() );
+			assert( !is_null() );
+			return *this;
+		}
+
+		bool is_null() const {
+			return null_;
+		}
+
+		const std::string &get_prod() const {
+			return prod_;
+		}
+
+		void flatten( std::vector<lex_token> *fl ) const {
+			assert( fl != 0 );
+
+
+			assert( !is_null() );
+
+			if( is_terminal() ) {
+				fl->push_back(term_);
+			} else {
+				for( auto it = begin(); it != end(); ++it  ) {
+					it->flatten(fl);
+				}
+			}
+
+		}
+
+		void annotate( const char *annot ) {
+			annot_ = annot;
+		}
+
+
+		const std::string &get_annot() const {
+			return annot_;
+		}
+	private:
+		bool null_;
+		bool is_term_;
+		lex_token term_;
+
+		std::string prod_;
+		std::string annot_;
+	};
+
+	void print_node( const node &n, int indent = 0 ) {
+
+		for( int i = 0; i < indent; ++i ) {
+			std::cout << " ";
+		}
+
+		const std::string &a = n.get_annot();
+
+		if( !a.empty() ) {
+			std::cout << "[" << a << "]";
+		}
+		if( n.is_null() ) {
+			std::cout << "null!!!\n";
+
+		} else if( n.is_terminal() ) {
+			std::cout << "term: " << n.get_terminal() << "\n";
+		} else {
+			std::cout << "inner:" << n.get_prod() << "\n";
+
+			for( const node &cn : n.get_list() ) {
+				print_node( cn, indent+1 );
+			}
+
+		}
+	}
+
+	//typedef std::vector<node> node_list;
+
+	typedef std::function<node (token_stream *)> rule_t;
+
+	class match_keyword : private std::string {
+	public:
+		match_keyword( const std::string &s ) : std::string(s) {}
+
+		node operator()( token_stream *ts ) {
+			if( ts->end_of_input() ) {
+				return node();
+			}
+			if( isa<lex::keyword>(*ts->get())) {
+				if( static_cast<lex::keyword&>(*ts->get()).get() == *this ) {
+					return node( ts->get_and_next() );
+				} else {
+					return node();
+				}
+			}
+
+		}
+
+	};
+
+	class match_other : private std::string {
+	public:
+		match_other( const std::string &s ) : std::string(s) {}
+
+		node operator()( token_stream *ts ) {
+			if( ts->end_of_input() ) {
+				return node();
+			}
+			while( isa<lex::other>(*ts->get())) {
+				if( static_cast<lex::other&>(*ts->get()).get() == *this ) {
+					return node( ts->get_and_next() );
+				} else {
+					return node();
+				}
+			}
+
+		}
+
+	};
+
+
+	class match_name {
+	public:
+		match_name() {}
+
+		node operator()( token_stream *ts ) {
+			if( ts->end_of_input() ) {
+				return node();
+			}
+			if( isa<lex::name>(*ts->get())) {
+				return node( ts->get_and_next() );
+			} else {
+				return node();
+			}
+
+		}
+
+	};
+
+	template<const lex::constant::const_type type>
+	class match_constant {
+	public:
+		match_constant() {}
+
+		node operator()( token_stream *ts ) {
+			if( ts->end_of_input() ) {
+				return node();
+			}
+			if( isa<lex::constant>(*ts->get())) {
+				if( static_cast<lex::constant&>(*ts->get()).get_type() == type ) {
+					return node( ts->get() );
+				} else {
+					return node();
+				}
+			} else {
+				return node();
+			}
+
+		}
+
+	};
+
+	class match_list {
+
+	public:
+		match_list( std::initializer_list<rule_t> list ) : ml_(list) {}
+
+		node operator()(token_stream *ts) {
+			if( ts->end_of_input() ) {
+				return node();
+			}
+
+			ts_trans tr( ts );
+
+			std::vector<node> nodes;
+
+			for( rule_t rule : ml_ ) {
+				node n = rule(ts);
+
+				if( n.is_null() ) {
+					return node();
+				}
+
+				nodes.push_back( n );
+			}
+
+			tr.commit();
+
+
+			return node(nodes, "list");
+
+		}
+
+	private:
+		std::vector<rule_t> ml_;
+
+
+	};
+
+
+	class match_multi {
+	public:
+		match_multi( rule_t r ) : r_(r) {}
+
+		node operator()( token_stream *ts ) {
+
+			if( ts->end_of_input() ) {
+				return node();
+			}
+
+			std::vector<node> nodes;
+
+			while( true ) {
+				node n = r_(ts);
+
+				if( n.is_null() ) {
+					break;
+				}
+
+				nodes.push_back( n );
+
+			}
+
+			return node(nodes, "multi");
+		}
+
+	private:
+		rule_t r_;
+	};
+
+
+	class match_any {
+	public:
+		match_any( std::initializer_list<rule_t> list ) : ml_(list) {}
+
+		node operator()(token_stream *ts) {
+			if( ts->end_of_input() ) {
+				return node();
+			}
+
+
+
+			for( rule_t rule : ml_ ) {
+				node n = rule(ts);
+
+				if( !n.is_null() ) {
+					return n;
+				}
+			}
+			return node();
+		}
+
+	private:
+		std::vector<rule_t> ml_;
+
+	};
+
+//	node match_primary( token_stream *ts ) {
+//
+//		rule_t identifier = match_name();
+//
+//		rule_t constant = match_any({
+//			match_constant<lex::constant::const_type::character>(),
+//			match_constant<lex::constant::const_type::integer>()
+//		});
+//
+//
+//		rule_t string = match_constant<lex::constant::const_type::string>();
+//
+//		rule_t dot = match_list( {std::bind( std::mem_fn( &parser::match_primary ), match_other( "." ), identifier } );
+//
+//		rule_t r = match_any( { identifier, constant, string, dot } );
+//
+//		return r(ts);
+//	}
+
+};
+
 int main() {
   
-    std::ifstream is( "test.c" );
+    std::ifstream is( "test2.c" );
     
     
     
@@ -327,12 +786,13 @@ int main() {
     
     my_lexer l( (std::istream_iterator<char>(is)), std::istream_iterator<char>() );
     
-    token_buffer tb( &l );
+    token_stream tb( &l );
     
     for( auto it = tb.begin(); it != tb.end(); ++it ) {
 
-    	std::cout << "tb " << (it - tb.begin()) << ": " << *(*it) << "\n";
+//    	std::cout << "tb " << (it - tb.begin()) << ": " << *(*it) << "\n";
     }
-    
+
+    std::cout << "num token: " << (tb.end() - tb.begin()) << "\n";
 //     std::cout << "blub\n";
-};
+}
