@@ -624,7 +624,7 @@ struct value {
 		auto it = env.find(lvalue_name_);
 		assert( it != env.end() );
 
-		assert( v_ == it->second );
+		// assert( v_ == it->second ); this is not true: e.g. for a = a++ if 'a' is evaluated before 'a++'
 
 		auto pair = *it;
 		if( add ) {
@@ -726,6 +726,18 @@ value eval_node( const node &n, std::map<std::string,int> &env ) {
 		} else if( n.get_prod() == "paren" ) {
 			assert( n.size() == 1 );
 			return eval_node(n.at(0), env);
+		} else if( n.get_prod() == "expr_list") {
+			assert( n.size() == 2 );
+
+			eval_node(n.at(0), env);
+			return eval_node(n.at(1), env);
+		} else if( n.get_prod() == "assign" ) {
+			assert( n.size() == 2 );
+			value v1 = eval_node(n.at(0), env);
+			value v2 = eval_node(n.at(1), env);
+
+			v1.mod_lvalue(env, v2, false );
+			return int(v1);
 		}
 
 		std::cerr << "non-term: " << n.get_prod() << "\n";
