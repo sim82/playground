@@ -384,6 +384,7 @@ public:
 
 	template<typename iiter>
 	token_stream( lexer<iiter> * l ) {
+		reserve(100000);
 		while( true ) {
 			auto tok = l->next();
 
@@ -395,6 +396,8 @@ public:
 
 			push_back( tok );
 		}
+
+		current_ = begin();
 	}
 
 	typedef std::vector<std::shared_ptr<lex::token> > base_type;
@@ -419,7 +422,7 @@ public:
 
 
 	bool end_of_input() {
-		return current_ < end();
+		return current_ >= end();
 	}
 
 
@@ -479,7 +482,9 @@ public:
 	public:
 		node( lex_token tok ) : null_(false), is_term_(true), term_(tok), prod_("term") {}
 
-		node( const std::vector<node> &l, const char *prod ) : std::vector<node>(l), null_(false), is_term_(false), term_(0), prod_(prod) {}
+		node( const std::vector<node> &l, const std::string &prod ) : std::vector<node>(l), null_(false), is_term_(false), term_(0), prod_(prod) {}
+//		node( const std::vector<node> &l, const char *prod ) : std::vector<node>(l), null_(false), is_term_(false), term_(0), prod_(prod) {}
+		//node( const std::initializer_list<node> &l, const char *prod ) : std::vector<node>(l), null_(false), is_term_(false), term_(0), prod_(prod) {}
 
 		node() : null_(true), is_term_(false), term_(0), prod_("null") {}
 
@@ -558,7 +563,7 @@ public:
 			std::cout << "null!!!\n";
 
 		} else if( n.is_terminal() ) {
-			std::cout << "term: " << n.get_terminal() << "\n";
+			std::cout << "term: " << *(n.get_terminal()) << "\n";
 		} else {
 			std::cout << "inner:" << n.get_prod() << "\n";
 
@@ -601,13 +606,12 @@ public:
 			if( ts->end_of_input() ) {
 				return node();
 			}
-			while( isa<lex::other>(*ts->get())) {
+			if( isa<lex::other>(*ts->get())) {
 				if( static_cast<lex::other&>(*ts->get()).get() == *this ) {
 					return node( ts->get_and_next() );
-				} else {
-					return node();
 				}
 			}
+			return node();
 
 		}
 
@@ -638,18 +642,20 @@ public:
 		match_constant() {}
 
 		node operator()( token_stream *ts ) {
+//			std::cout << "try constant:\n";
 			if( ts->end_of_input() ) {
 				return node();
 			}
+
+
 			if( isa<lex::constant>(*ts->get())) {
+//				std::cout << "is constatant\n";
 				if( static_cast<lex::constant&>(*ts->get()).get_type() == type ) {
-					return node( ts->get() );
-				} else {
-					return node();
+//					std::cout << "is type\n";
+					return node( ts->get_and_next() );
 				}
-			} else {
-				return node();
 			}
+			return node();
 
 		}
 
@@ -658,7 +664,7 @@ public:
 	class match_list {
 
 	public:
-		match_list( std::initializer_list<rule_t> list ) : ml_(list) {}
+		match_list( std::initializer_list<rule_t> list, const char *annot = "" ) : ml_(list), annot_(annot) {}
 
 		node operator()(token_stream *ts) {
 			if( ts->end_of_input() ) {
@@ -682,13 +688,17 @@ public:
 			tr.commit();
 
 
-			return node(nodes, "list");
+			if( !annot_.empty() ) {
+				return node(nodes, annot_);
+			} else {
+				return node(nodes, "list");
+			}
 
 		}
 
 	private:
 		std::vector<rule_t> ml_;
-
+		std::string annot_;
 
 	};
 
@@ -750,30 +760,200 @@ public:
 
 	};
 
-//	node match_primary( token_stream *ts ) {
+
+	node match_term_primary( token_stream *ts ) {
+		rule_t expression = [&]( token_stream *ts ) {return match_expression(ts);};
+		return (match_any( {
+			match_constant<lex::constant::const_type::character>(),
+			match_constant<lex::constant::const_type::integer>(),
+			match_constant<lex::constant::const_type::string>(),
+			match_name(),
+			match_list( {match_other( "(" ), expression, match_other(")") }, "paren" )
+		}))(ts);
+	}
+
+	node match_primary( token_stream *ts ) {
+
+		node tn = match_term_primary(ts);
+		if( tn.is_null()) {
+			return tn;
+		}
+
+		rule_t primary = [&]( token_stream *ts ) {return match_primary(ts);};
+
+		rule_t expression = [&]( token_stream *ts ) {return match_expression(ts);};
+		rule_t dot = match_list( {match_other( "." ), primary }, "dot" );
+		rule_t arrow = match_list( {match_other( "->" ), primary }, "arrow" );
+		rule_t bracket = match_list( {match_other( "[" ), expression, match_other( "]") }, "index" );
+
+		rule_t any = match_any({dot,arrow, bracket});
+
+		node an = any(ts);
+		if( an.is_null() ) {
+			return tn;
+		} else {
+
+			return node( {tn, an}, "postfix" );
+		}
+
+	}
+
+	node match_unary( token_stream *ts ) {
+		rule_t primary = [&]( token_stream *ts ) {return match_primary(ts);};
+
+		rule_t unary = [&]( token_stream *ts ) {return match_unary(ts);};
+
+		rule_t unary_sel = match_any( {
+			match_list( {match_other( "sizeof"), primary }, "sizeof_primary" ),
+			match_list( {primary, match_other( "++") }, "postfix_inc"),
+			match_list( {primary, match_other( "--") }, "postfix_dec"),
+			primary,
+			match_list( {match_other( "*"), unary }, "unary_star"),
+			match_list( {match_other( "&"), unary }, "unary_amp"),
+			match_list( {match_other( "-"), unary }, "unary_minus"),
+			match_list( {match_other( "!"), unary }, "unary_not"),
+			match_list( {match_other( "~"), unary }, "unary_tilde"),
+			match_list( {match_other( "++"), unary }, "prefix_inc"),
+			match_list( {match_other( "--"), unary }, "prefix_dec"),
+
+		} );
+
+		return unary_sel(ts);
+	}
+
+	node match_binary_mult( token_stream *ts ) {
+		rule_t unary = [&]( token_stream *ts ) {return match_unary(ts);};
+
+		node n = unary(ts);
+
+		if( n.is_null() ) {
+			return n;
+		}
+
+		rule_t mult = [&]( token_stream *ts ) {return match_binary_mult(ts);};
+
+
+		rule_t binary_mult = match_any( {
+			match_list( { match_other("*"), mult }, "infix_mult" ),
+			match_list( { match_other("/"), mult }, "infix_div" )
+		});
+
+		{
+			node nx = binary_mult(ts);
+			if( !nx.is_null())
+			{
+				n = node( { n, nx }, "mult" );
+			}
+		}
+		return n;
+	}
+
+	node match_binary_add( token_stream *ts ) {
+		rule_t binary_mult = [&]( token_stream *ts ) {return match_binary_mult(ts);};
+		node n = binary_mult(ts);
+
+		if( n.is_null() ) {
+			return n;
+		}
+
+		rule_t add = [&]( token_stream *ts ) {return match_binary_add(ts);};
+		rule_t binary_add = match_any( {
+			match_list( { match_other("+"), add }, "infix_add" ),
+			match_list( { match_other("-"), add }, "infix_sub" )
+
+		});
+		{
+			node nx = binary_add(ts);
+			if( !nx.is_null())
+			{
+				n = node( { n, nx }, "add" );
+			}
+		}
+
+		return n;
+	}
+
+
+
+	node match_expression( token_stream *ts ) {
+		return match_binary_add(ts);
+	}
+//	node match_expression( token_stream *ts ) {
+//		node bn = match_binary( ts );
 //
-//		rule_t identifier = match_name();
+//		if( bn.is_null() ) {
+//			return bn;
+//		}
+//		rule_t binary = [&]( token_stream *ts ) {return match_binary(ts);};
+//		rule_t comma = match_list( {match_other(","), binary } );
 //
-//		rule_t constant = match_any({
-//			match_constant<lex::constant::const_type::character>(),
-//			match_constant<lex::constant::const_type::integer>()
-//		});
 //
-//
-//		rule_t string = match_constant<lex::constant::const_type::string>();
-//
-//		rule_t dot = match_list( {std::bind( std::mem_fn( &parser::match_primary ), match_other( "." ), identifier } );
-//
-//		rule_t r = match_any( { identifier, constant, string, dot } );
-//
-//		return r(ts);
 //	}
+
+	node match_assign( token_stream *ts ) {
+
+		rule_t constant = match_any({
+			match_constant<lex::constant::const_type::character>(),
+			match_constant<lex::constant::const_type::integer>(),
+			match_constant<lex::constant::const_type::string>()
+		});
+
+
+
+		rule_t primary = [&]( token_stream *s ) {return match_primary(s);};
+		rule_t assign = match_list( { primary, match_other("="), primary, match_other( ";" ) } );
+
+		return assign(ts);
+
+	}
 
 };
 
+//class parser2 {
+//
+//
+//	parser2( token_stream &ts ) : ts_(ts)
+//	{}
+//
+//
+//	bool match_name() {
+//		if( isa<lex::name>(*(ts_.get())) ) {
+//			ts_.next();
+//			return true;
+//		} else {
+//			return false;
+//		}
+//
+//	}
+//
+//	bool match_keyword( const char *w ) {
+//		if( isa<lex::keyword>(*(ts_.get())) ) {
+//			if( static_cast<lex::keyword*>(ts_.get().get())->get() == w ) {
+//				ts_.next();
+//				return true;
+//			}
+//		}
+//		return false;
+//
+//	}
+//
+//	bool match_other( const char *w ) {
+//		if( isa<lex::other>(*(ts_.get())) ) {
+//			if( static_cast<lex::other*>(ts_.get().get())->get() == w ) {
+//				ts_.next();
+//				return true;
+//			}
+//		}
+//		return false;
+//
+//	}
+//private:
+//	token_stream &ts_;
+//};
+
 int main() {
   
-    std::ifstream is( "test2.c" );
+    std::ifstream is( "test4.c" );
     
     
     
@@ -790,9 +970,13 @@ int main() {
     
     for( auto it = tb.begin(); it != tb.end(); ++it ) {
 
-//    	std::cout << "tb " << (it - tb.begin()) << ": " << *(*it) << "\n";
+    	std::cout << "tb " << (it - tb.begin()) << ": " << *(*it) << "\n";
     }
 
     std::cout << "num token: " << (tb.end() - tb.begin()) << "\n";
+
+    parser p;
+    parser::node n = p.match_expression( &tb );
+    p.print_node(n);
 //     std::cout << "blub\n";
 }
