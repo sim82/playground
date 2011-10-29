@@ -1,5 +1,7 @@
 #include <string>
 #include <vector>
+#include <deque>
+#include <map>
 #include <algorithm>
 #include <iostream>
 #include <fstream>
@@ -474,105 +476,252 @@ inline bool isa( T2 & ref ) {
 }
 
 
+namespace parse {
+
+typedef std::shared_ptr<lex::token> lex_token;
+
+class node : private std::deque<node> {
+public:
+	node( lex_token tok ) : null_(false), is_term_(true), term_(tok), prod_("term") {}
+
+	node( const std::initializer_list<node> &l, const std::string &prod ) : std::deque<node>(l), null_(false), is_term_(false), term_(0), prod_(prod) {}
+
+	template<typename iiter>
+	node( iiter first, iiter last, const std::string &prod ) : std::deque<node>(first, last), null_(false), is_term_(false), term_(0), prod_(prod) {}
+//		node( const std::vector<node> &l, const char *prod ) : std::vector<node>(l), null_(false), is_term_(false), term_(0), prod_(prod) {}
+	//node( const std::initializer_list<node> &l, const char *prod ) : std::vector<node>(l), null_(false), is_term_(false), term_(0), prod_(prod) {}
+
+	node() : null_(true), is_term_(false), term_(0), prod_("null") {}
+
+	bool is_terminal() const {
+
+
+		return is_term_;
+	}
+
+	lex_token get_terminal() const {
+		assert( !is_null() );
+		assert( is_terminal() );
+		return term_;
+	}
+
+	const std::deque<node> &get_list() const {
+
+		assert( !is_terminal() );
+		assert( !is_null() );
+		return *this;
+	}
+
+	bool is_null() const {
+		return null_;
+	}
+
+	const std::string &get_prod() const {
+		return prod_;
+	}
+
+	void flatten( std::vector<lex_token> *fl ) const {
+		assert( fl != 0 );
+
+
+		assert( !is_null() );
+
+		if( is_terminal() ) {
+			fl->push_back(term_);
+		} else {
+			for( auto it = begin(); it != end(); ++it  ) {
+				it->flatten(fl);
+			}
+		}
+
+	}
+
+	void annotate( const char *annot ) {
+		annot_ = annot;
+	}
+
+
+	const std::string &get_annot() const {
+		return annot_;
+	}
+
+	using std::deque<node>::at;
+	using std::deque<node>::push_front;
+	using std::deque<node>::push_back;
+	using std::deque<node>::size;
+private:
+	bool null_;
+	bool is_term_;
+	lex_token term_;
+
+	std::string prod_;
+	std::string annot_;
+};
+
+void print_node( const node &n, int indent = 0 ) {
+
+	for( int i = 0; i < indent; ++i ) {
+		std::cout << " ";
+	}
+
+	const std::string &a = n.get_annot();
+
+	if( !a.empty() ) {
+		std::cout << "[" << a << "]";
+	}
+	if( n.is_null() ) {
+		std::cout << "null!!!\n";
+
+	} else if( n.is_terminal() ) {
+		std::cout << "term: " << *(n.get_terminal()) << "\n";
+	} else {
+		std::cout << n.get_prod() << "(\n";
+
+		for( const node &cn : n.get_list() ) {
+			print_node( cn, indent+1 );
+		}
+
+	}
+}
+
+struct value {
+
+	value( int v ) : v_(v), is_lvalue_(false)
+	{
+
+	}
+
+	value( int v, const std::string &lvalue )
+	  : v_(v), is_lvalue_(true), lvalue_name_(lvalue)
+	{
+
+	}
+
+	operator const int () {
+		return v_;
+	}
+
+	int v_;
+
+	void mod_lvalue( std::map<std::string,int> &env, int v, bool add  ) {
+		assert( is_lvalue_);
+
+		auto it = env.find(lvalue_name_);
+		assert( it != env.end() );
+
+		assert( v_ == it->second );
+
+		auto pair = *it;
+		if( add ) {
+			v_ += v;
+		} else {
+			v_ = v;
+		}
+
+		env[lvalue_name_] = v_;
+//			std::cout << "mod_lvalue: " << v_ << " " << lvalue_name_ << " " << pair.second << "\n";
+	}
+	bool is_lvalue_;
+	std::string lvalue_name_;
+};
+
+value eval_node( const node &n, std::map<std::string,int> &env ) {
+	if( n.is_terminal() ) {
+
+		lex_token tok = n.get_terminal();
+
+		if( isa<lex::name>(*tok)) {
+			std::string name = (static_cast<lex::name *>(tok.get()))->get();
+
+			auto it = env.find(name);
+			if( it == env.end() ) {
+				std::cout << "eval lex::name: not found: " << name << "\n";
+				throw std::runtime_error( "bailing out" );
+			}
+
+			std::cout << "get name: " << name << " " << it->second << "\n";
+
+			return value( it->second, name );
+		} else if( isa<lex::constant>(*tok)) {
+			lex::constant *c = static_cast<lex::constant *>(tok.get());
+
+			if( c->get_type() != lex::constant::const_type::integer ) {
+				throw std::runtime_error( "non integer const" );
+			}
+
+			return value( atoi(c->get().c_str() ) );
+		}
+
+		throw std::runtime_error( "don't know what to do with terminal");
+//			if( tok->)//
+	} else {
+
+		if( n.get_prod() == "infix_add" ) {
+			assert( n.size() == 2 );
+			int v1 = eval_node(n.at(0), env);
+			int v2 = eval_node(n.at(1), env);
+
+			return v1 + v2;
+		} else if( n.get_prod() == "infix_sub" ) {
+			assert( n.size() == 2 );
+			int v1 = eval_node(n.at(0), env);
+			int v2 = eval_node(n.at(1), env);
+
+			return v1 - v2;
+		} else if( n.get_prod() == "infix_mult" ) {
+			assert( n.size() == 2 );
+			int v1 = eval_node(n.at(0), env);
+			int v2 = eval_node(n.at(1), env);
+
+			return v1 * v2;
+		} else if( n.get_prod() == "infix_add" ) {
+			assert( n.size() == 2 );
+			int v1 = eval_node(n.at(0), env);
+			int v2 = eval_node(n.at(1), env);
+
+			return v1 / v2;
+		} else if( n.get_prod() == "postfix_inc" ) {
+			assert( n.size() == 1 );
+			value v1 = eval_node(n.at(0), env);
+			int vret = v1;
+
+
+			v1.mod_lvalue(env, 1, true );
+			return vret;
+		} else if( n.get_prod() == "postfix_dec" ) {
+			assert( n.size() == 1 );
+			value v1 = eval_node(n.at(0), env);
+			int vret = v1;
+
+
+			v1.mod_lvalue(env, -1, true );
+			return vret;
+		} else if( n.get_prod() == "prefix_inc" ) {
+			assert( n.size() == 1 );
+			value v1 = eval_node(n.at(0), env);
+
+			v1.mod_lvalue(env, 1, true );
+			return int(v1); // TODO: can v1 keep it's lvalue status?
+		} else if( n.get_prod() == "prefix_dec" ) {
+			assert( n.size() == 1 );
+			value v1 = eval_node(n.at(0), env);
+
+			v1.mod_lvalue(env, -1, true );
+			return int(v1);
+		} else if( n.get_prod() == "paren" ) {
+			assert( n.size() == 1 );
+			return eval_node(n.at(0), env);
+		}
+
+		std::cerr << "non-term: " << n.get_prod() << "\n";
+		throw std::runtime_error( "unhandled non-terminal");
+	}
+}
+
+
+
 class parser {
 public:
-	typedef std::shared_ptr<lex::token> lex_token;
-
-	class node : private std::vector<node> {
-	public:
-		node( lex_token tok ) : null_(false), is_term_(true), term_(tok), prod_("term") {}
-
-		node( const std::vector<node> &l, const std::string &prod ) : std::vector<node>(l), null_(false), is_term_(false), term_(0), prod_(prod) {}
-//		node( const std::vector<node> &l, const char *prod ) : std::vector<node>(l), null_(false), is_term_(false), term_(0), prod_(prod) {}
-		//node( const std::initializer_list<node> &l, const char *prod ) : std::vector<node>(l), null_(false), is_term_(false), term_(0), prod_(prod) {}
-
-		node() : null_(true), is_term_(false), term_(0), prod_("null") {}
-
-		bool is_terminal() const {
-
-
-			return is_term_;
-		}
-
-		lex_token get_terminal() const {
-			assert( !is_null() );
-			assert( is_terminal() );
-			return term_;
-		}
-
-		const std::vector<node> &get_list() const {
-
-			assert( !is_terminal() );
-			assert( !is_null() );
-			return *this;
-		}
-
-		bool is_null() const {
-			return null_;
-		}
-
-		const std::string &get_prod() const {
-			return prod_;
-		}
-
-		void flatten( std::vector<lex_token> *fl ) const {
-			assert( fl != 0 );
-
-
-			assert( !is_null() );
-
-			if( is_terminal() ) {
-				fl->push_back(term_);
-			} else {
-				for( auto it = begin(); it != end(); ++it  ) {
-					it->flatten(fl);
-				}
-			}
-
-		}
-
-		void annotate( const char *annot ) {
-			annot_ = annot;
-		}
-
-
-		const std::string &get_annot() const {
-			return annot_;
-		}
-	private:
-		bool null_;
-		bool is_term_;
-		lex_token term_;
-
-		std::string prod_;
-		std::string annot_;
-	};
-
-	void print_node( const node &n, int indent = 0 ) {
-
-		for( int i = 0; i < indent; ++i ) {
-			std::cout << " ";
-		}
-
-		const std::string &a = n.get_annot();
-
-		if( !a.empty() ) {
-			std::cout << "[" << a << "]";
-		}
-		if( n.is_null() ) {
-			std::cout << "null!!!\n";
-
-		} else if( n.is_terminal() ) {
-			std::cout << "term: " << *(n.get_terminal()) << "\n";
-		} else {
-			std::cout << "inner:" << n.get_prod() << "\n";
-
-			for( const node &cn : n.get_list() ) {
-				print_node( cn, indent+1 );
-			}
-
-		}
-	}
 
 	//typedef std::vector<node> node_list;
 
@@ -664,7 +813,7 @@ public:
 	class match_list {
 
 	public:
-		match_list( std::initializer_list<rule_t> list, const char *annot = "" ) : ml_(list), annot_(annot) {}
+		match_list( std::initializer_list<rule_t> list, const char *annot = "", int passthrough = -1 ) : ml_(list), annot_(annot), passthrough_(passthrough) {}
 
 		node operator()(token_stream *ts) {
 			if( ts->end_of_input() ) {
@@ -675,63 +824,66 @@ public:
 
 			std::vector<node> nodes;
 
-			for( rule_t rule : ml_ ) {
+			for( size_t i = 0; i < ml_.size(); ++i ) {
+				rule_t rule = ml_[i];
 				node n = rule(ts);
 
 				if( n.is_null() ) {
 					return node();
 				}
 
-				nodes.push_back( n );
+				if( passthrough_ < 0 || int(i) == passthrough_ ) {
+					nodes.push_back( n );
+				}
 			}
 
 			tr.commit();
 
-
 			if( !annot_.empty() ) {
-				return node(nodes, annot_);
+				return node(nodes.begin(), nodes.end(), annot_);
 			} else {
-				return node(nodes, "list");
+				return node(nodes.begin(), nodes.end(), "list");
 			}
+
 
 		}
 
 	private:
 		std::vector<rule_t> ml_;
 		std::string annot_;
-
+		const int passthrough_;
 	};
 
 
-	class match_multi {
-	public:
-		match_multi( rule_t r ) : r_(r) {}
-
-		node operator()( token_stream *ts ) {
-
-			if( ts->end_of_input() ) {
-				return node();
-			}
-
-			std::vector<node> nodes;
-
-			while( true ) {
-				node n = r_(ts);
-
-				if( n.is_null() ) {
-					break;
-				}
-
-				nodes.push_back( n );
-
-			}
-
-			return node(nodes, "multi");
-		}
-
-	private:
-		rule_t r_;
-	};
+//	class match_multi {
+//	public:
+//		match_multi( rule_t r ) : r_(r) {}
+//
+//		node operator()( token_stream *ts ) {
+//
+//			if( ts->end_of_input() ) {
+//				return node();
+//			}
+//
+//			std::vector<node> nodes;
+//
+//			while( true ) {
+//				node n = r_(ts);
+//
+//				if( n.is_null() ) {
+//					break;
+//				}
+//
+//				nodes.push_back( n );
+//
+//			}
+//
+//			return node(nodes, "multi");
+//		}
+//
+//	private:
+//		rule_t r_;
+//	};
 
 
 	class match_any {
@@ -768,7 +920,7 @@ public:
 			match_constant<lex::constant::const_type::integer>(),
 			match_constant<lex::constant::const_type::string>(),
 			match_name(),
-			match_list( {match_other( "(" ), expression, match_other(")") }, "paren" )
+			match_list( {match_other( "(" ), expression, match_other(")") }, "paren", 1 )
 		}))(ts);
 	}
 
@@ -804,17 +956,17 @@ public:
 		rule_t unary = [&]( token_stream *ts ) {return match_unary(ts);};
 
 		rule_t unary_sel = match_any( {
-			match_list( {match_other( "sizeof"), primary }, "sizeof_primary" ),
-			match_list( {primary, match_other( "++") }, "postfix_inc"),
-			match_list( {primary, match_other( "--") }, "postfix_dec"),
+			match_list( {match_other( "sizeof"), primary }, "sizeof_primary", 1 ),
+			match_list( {primary, match_other( "++") }, "postfix_inc", 0),
+			match_list( {primary, match_other( "--") }, "postfix_dec", 0),
 			primary,
-			match_list( {match_other( "*"), unary }, "unary_star"),
-			match_list( {match_other( "&"), unary }, "unary_amp"),
-			match_list( {match_other( "-"), unary }, "unary_minus"),
-			match_list( {match_other( "!"), unary }, "unary_not"),
-			match_list( {match_other( "~"), unary }, "unary_tilde"),
-			match_list( {match_other( "++"), unary }, "prefix_inc"),
-			match_list( {match_other( "--"), unary }, "prefix_dec"),
+			match_list( {match_other( "*"), unary }, "unary_star", 1),
+			match_list( {match_other( "&"), unary }, "unary_amp", 1),
+			match_list( {match_other( "-"), unary }, "unary_minus", 1),
+			match_list( {match_other( "!"), unary }, "unary_not", 1),
+			match_list( {match_other( "~"), unary }, "unary_tilde", 1),
+			match_list( {match_other( "++"), unary }, "prefix_inc", 1),
+			match_list( {match_other( "--"), unary }, "prefix_dec", 1),
 
 		} );
 
@@ -829,23 +981,31 @@ public:
 		if( n.is_null() ) {
 			return n;
 		}
-
+#if 0
 		rule_t mult = [&]( token_stream *ts ) {return match_binary_mult(ts);};
 
 
 		rule_t binary_mult = match_any( {
-			match_list( { match_other("*"), mult }, "infix_mult" ),
-			match_list( { match_other("/"), mult }, "infix_div" )
+			match_list( { match_other("*"), unary }, "infix_mult" ),
+			match_list( { match_other("/"), unary }, "infix_div" )
 		});
 
 		{
-			node nx = binary_mult(ts);
-			if( !nx.is_null())
-			{
+
+			node nx;
+			while( !(nx = binary_mult(ts)).is_null() ) {
+
 				n = node( { n, nx }, "mult" );
 			}
 		}
 		return n;
+#endif
+		return match_all_from_left (ts, n, match_any( {
+			match_list( { match_other("*"), unary }, "infix_mult", 1 ),
+			match_list( { match_other("/"), unary }, "infix_div", 1 ),
+			match_list( { match_other("%"), unary }, "infix_mod", 1 )
+
+		}));
 	}
 
 	node match_binary_add( token_stream *ts ) {
@@ -856,59 +1016,191 @@ public:
 			return n;
 		}
 
-		rule_t add = [&]( token_stream *ts ) {return match_binary_add(ts);};
-		rule_t binary_add = match_any( {
-			match_list( { match_other("+"), add }, "infix_add" ),
-			match_list( { match_other("-"), add }, "infix_sub" )
+		return match_all_from_left (ts, n, match_any( {
+			match_list( { match_other("+"), binary_mult }, "infix_add", 1 ),
+			match_list( { match_other("-"), binary_mult }, "infix_sub", 1 )
+		}));
+	}
 
-		});
-		{
-			node nx = binary_add(ts);
-			if( !nx.is_null())
-			{
-				n = node( { n, nx }, "add" );
-			}
+	node match_binary_shift( token_stream *ts ) {
+		rule_t binary_add = [&]( token_stream *ts ) {return match_binary_add(ts);};
+		node n = binary_add(ts);
+
+		if( n.is_null() ) {
+			return n;
 		}
 
+		return match_all_from_left (ts, n, match_any( {
+			match_list( { match_other("<<"), binary_add }, "infix_lshift", 1 ),
+			match_list( { match_other(">>"), binary_add }, "infix_rshift", 1 )
+		}));
+	}
+
+	node match_binary_compare( token_stream *ts ) {
+		rule_t binary_shift = [&]( token_stream *ts ) {return match_binary_shift(ts);};
+		node n = binary_shift(ts);
+
+		if( n.is_null() ) {
+			return n;
+		}
+
+		return match_all_from_left (ts, n, match_any( {
+			match_list( { match_other("<"), binary_shift }, "infix_lt", 1 ),
+			match_list( { match_other("<="), binary_shift }, "infix_lteq", 1 ),
+			match_list( { match_other(">"), binary_shift }, "infix_gt", 1 ),
+			match_list( { match_other(">="), binary_shift }, "infix_gteq", 1 )
+		}));
+	}
+	node match_binary_equal( token_stream *ts ) {
+		rule_t binary_compare = [&]( token_stream *ts ) {return match_binary_compare(ts);};
+		node n = binary_compare(ts);
+
+		if( n.is_null() ) {
+			return n;
+		}
+
+		return match_all_from_left (ts, n, match_any( {
+			match_list( { match_other("=="), binary_compare }, "infix_eq", 1 ),
+			match_list( { match_other("!="), binary_compare }, "infix_neq", 1 ),
+
+		}));
+	}
+
+	node match_binary_bit_and( token_stream *ts ) {
+		rule_t prec = [&]( token_stream *ts ) {return match_binary_equal(ts);};
+		node n = prec(ts);
+
+		if( n.is_null() ) {
+			return n;
+		}
+
+		return match_all_from_left (ts, n,
+				match_list( { match_other("&"), prec }, "infix_bit_and", 1 )
+		);
+	}
+
+	node match_binary_bit_xor( token_stream *ts ) {
+		rule_t prec = [&]( token_stream *ts ) {return match_binary_bit_and(ts);};
+		node n = prec(ts);
+
+		if( n.is_null() ) {
+			return n;
+		}
+
+		return match_all_from_left (ts, n,
+			match_list( { match_other("^"), prec }, "infix_bit_xor", 1 )
+		);
+	}
+	node match_binary_bit_or( token_stream *ts ) {
+		rule_t prec = [&]( token_stream *ts ) {return match_binary_bit_xor(ts);};
+		node n = prec(ts);
+
+		if( n.is_null() ) {
+			return n;
+		}
+
+		return match_all_from_left (ts, n,
+			match_list( { match_other("|"), prec }, "infix_bit_or", 1 )
+		);
+	}
+	node match_binary_log_and( token_stream *ts ) {
+		rule_t prec = [&]( token_stream *ts ) {return match_binary_bit_or(ts);};
+		node n = prec(ts);
+
+		if( n.is_null() ) {
+			return n;
+		}
+
+		return match_all_from_left (ts, n,
+			match_list( { match_other("&&"), prec }, "infix_log_and", 1 )
+		);
+	}
+
+	// top level of binary terms: log_or
+	node match_binary( token_stream *ts ) {
+		rule_t prec = [&]( token_stream *ts ) {return match_binary_log_and(ts);};
+		node n = prec(ts);
+
+		if( n.is_null() ) {
+			return n;
+		}
+
+		return match_all_from_left (ts, n,
+			match_list( { match_other("||"), prec }, "infix_log_or", 1 )
+		);
+	}
+
+	node match_all_from_left( token_stream *ts, node n, rule_t rule ) {
+
+		node nx;
+		while(!(nx = rule(ts)).is_null() ) {
+
+			//n = node( { n, nx.at(1) }, nx.get_prod() );
+			if( !n.is_null() ) {
+				nx.push_front( n );
+			}
+			n = nx;
+		}
 		return n;
 	}
 
 
 
+	// TODO: add inline conditional. it seems kind of whacky...
+
+
+	node match_assignment( token_stream *ts ) {
+		rule_t binary = [&]( token_stream *ts ) {return match_binary(ts);};
+
+		// K&R says that conditional either match plain binary _or_ unaries followed by assignment.
+		// Supposingly this is because only unaries can potentially yield lvalues. i assume that it is ok to
+		// match binries followed by assignment and worry about the lvalue stuff during semantic analysis.
+
+		node n = binary(ts);
+
+		if( n.is_null()) {
+			return n;
+		}
+
+		rule_t assignment = [&]( token_stream *ts ) {return match_assignment(ts);};
+
+		rule_t r = match_any( {
+			match_list( { match_other("="), assignment }, "assign", 1 ),
+			match_list( { match_other("*="), assignment }, "assign_mult", 1 ),
+			match_list( { match_other("/="), assignment }, "assign_div", 1 ),
+			match_list( { match_other("%="), assignment }, "assign_mod", 1 ),
+			match_list( { match_other("+="), assignment }, "assign_add", 1 ),
+			match_list( { match_other("-="), assignment }, "assign_sub", 1 ),
+			match_list( { match_other(">>="), assignment }, "assign_rshift", 1 ),
+			match_list( { match_other("<<="), assignment }, "assign_lshift", 1 ),
+			match_list( { match_other("&="), assignment }, "assign_and", 1 ),
+			match_list( { match_other("^="), assignment }, "assign_xor", 1 ),
+			match_list( { match_other("|="), assignment }, "assign_or", 1 ),
+
+		} );
+		node nx;
+		while( !(nx = r(ts)).is_null()) {
+			nx.push_front(n);
+			n = nx;
+		}
+		return n;
+	}
+
+
 	node match_expression( token_stream *ts ) {
-		return match_binary_add(ts);
+		rule_t assignment = [&]( token_stream *ts ) {return match_assignment(ts);};
+		node n = assignment(ts);
+
+		if( n.is_null() ) {
+			return n;
+		}
+
+		return match_all_from_left( ts, n, match_list( {match_other(","), assignment }, "expr_list", 1));
 	}
-//	node match_expression( token_stream *ts ) {
-//		node bn = match_binary( ts );
-//
-//		if( bn.is_null() ) {
-//			return bn;
-//		}
-//		rule_t binary = [&]( token_stream *ts ) {return match_binary(ts);};
-//		rule_t comma = match_list( {match_other(","), binary } );
-//
-//
-//	}
 
-	node match_assign( token_stream *ts ) {
-
-		rule_t constant = match_any({
-			match_constant<lex::constant::const_type::character>(),
-			match_constant<lex::constant::const_type::integer>(),
-			match_constant<lex::constant::const_type::string>()
-		});
-
-
-
-		rule_t primary = [&]( token_stream *s ) {return match_primary(s);};
-		rule_t assign = match_list( { primary, match_other("="), primary, match_other( ";" ) } );
-
-		return assign(ts);
-
-	}
 
 };
-
+} // namespace parse
 //class parser2 {
 //
 //
@@ -953,7 +1245,7 @@ public:
 
 int main() {
   
-    std::ifstream is( "test4.c" );
+    std::ifstream is( "test5.c" );
     
     
     
@@ -975,8 +1267,19 @@ int main() {
 
     std::cout << "num token: " << (tb.end() - tb.begin()) << "\n";
 
-    parser p;
-    parser::node n = p.match_expression( &tb );
-    p.print_node(n);
-//     std::cout << "blub\n";
+    parse::parser p;
+    parse::node n = p.match_expression( &tb );
+    parse::print_node(n);
+
+    std::map<std::string,int> env;
+    env["a"] = 1;
+    env["b"] = 2;
+    env["c"] = 3;
+    env["d"] = 4;
+    env["e"] = 5;
+    env["f"] = 6;
+
+    int res = parse::eval_node(n, env);
+
+    std::cout << "res: " << res << "\n";
 }
