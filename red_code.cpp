@@ -34,21 +34,39 @@ int sample_ideal_soliton( const int N ) {
 	}
 }
 
-int sample_robust_soliton( const int N, const float c = 0.05, const float delta = 0.5 ) {
+//int sample_robust_soliton( const int N, const float c = 0.2, const float delta = 0.5 ) {
+//
+//	const float R = c * log(N/delta) * sqrt(N);
+//
+//	//const float R = N / float(M);
+//
+//	while(true) {
+//		int k = 1 + std::rand() % N;
+//		if( k < (N/R) && randf() <= R/(k*N)) {
+//			return k;
+//		} else if( k == int(N/R) && randf() < R * log(R/delta) / N ) {
+//			return k;
+//		}
+//	}
+//}
 
-	const float R = c * log(N/delta) * sqrt(N);
+int sample_robust_soliton( const int N, const int dM = 10, const float delta = 0.5 ) {
+
+//	const float R = c * log(N/delta) * sqrt(N);
 
 	//const float R = N / float(M);
-
+	const int M = N / dM;
+	const float R = N / float(M);
 	while(true) {
 		int k = 1 + std::rand() % N;
-		if( k < (N/R) && randf() <= R/(k*N)) {
+		if( k < M && randf() <= 1.0/(k*M)) {
 			return k;
-		} else if( k == int(N/R) && randf() < R * log(R/delta) / N ) {
+		} else if( k == M && randf() < log(R/delta) / M ) {
 			return k;
 		}
 	}
 }
+
 
 std::vector<bool> & operator^=( std::vector<bool> &op1, const std::vector<bool> &op2 ) {
  
@@ -168,14 +186,14 @@ public:
         packet<block_size> packet(degree, seed_);
         
 
-        std::cout << "send: ";
+//        std::cout << "send: ";
         for( size_t i = 0; i < degree; ++i ) {
          
             size_t block_index = rwor.next();
-            std::cout << block_index << " ";
+//            std::cout << block_index << " ";
             packet.xor_block( get_block(block_index) );
         }
-        std::cout << "\n";
+//        std::cout << "\n";
         return packet;
         
     }
@@ -204,13 +222,13 @@ public:
 
         rand_without_replacement rwor(num_blocks, p.get_seed());
 
-        std::cout << "recv: ";
+//        std::cout << "recv: ";
         for( size_t i = 0; i < degree; ++i ) {
          
             index_list_.push_back( rwor.next() );
-            std::cout << index_list_.back() << " ";
+//            std::cout << index_list_.back() << " ";
         }
-        std::cout << "\n";
+//        std::cout << "\n";
         
         
     }
@@ -275,7 +293,7 @@ public:
         
         dec_packet_t dpacket( packet, num_blocks );
         size_t degree = dpacket.get_degree();
-
+        const size_t init_degree = degree;
         
         
         if( degree > 1 ) {
@@ -284,17 +302,28 @@ public:
             degree = dpacket.get_degree();
              
         }
-        
+        size_t nelim = 0;
         if( degree == 1 ) {
-            std::cout << "full packet: " << dpacket.get_index() << "\n";
-            match_full_packet(dpacket);
+
+        	std::vector<dec_packet_t> new_full;
+        	new_full.push_back( std::move(dpacket));
+
+        	while( !new_full.empty() ) {
+//        		std::cout << "match full packet: " <<  new_full.back().get_index() << "\n";
+
+        		full_packets_.push_back(std::move( new_full.back() ));
+        		new_full.pop_back();
+        		match_full_packet(full_packets_.back(), &new_full);
+//        		std::cout << "new full: " << new_full.size() << "\n";
+        		nelim++;
+        	}
             
-            full_packets_.push_back( std::move(dpacket) );
+            //full_packets_.push_back( std::move(dpacket) );
         } else {
          
             packet_store_.push_back( std::move(dpacket) );
         }
-
+        std::cout << "nelim: " << nelim << " " << init_degree << "\n";
         return decode();
         
     }
@@ -321,7 +350,7 @@ public:
         
         if( n != 0 ) {
          
-            std::cout << "missing: " << n << "\n";
+//            std::cout << "missing: " << n << "\n";
             return message_t();
         }
         
@@ -359,7 +388,7 @@ public:
         }
     }
     
-    void match_full_packet( const dec_packet_t &dpacket ) {
+    void match_full_packet( const dec_packet_t &dpacket, std::vector<dec_packet_t> *ret_prom ) {
         assert( dpacket.get_degree() == 1 );
         
         std::vector<size_t> promote;
@@ -379,7 +408,7 @@ public:
         for( auto it = promote.rbegin(); it != promote.rend(); ++it ) {
             assert( *it < packet_store_.size() );
             
-            full_packets_.push_back( std::move( packet_store_.at(*it) ));
+            ret_prom->push_back( std::move( packet_store_.at(*it) ));
             packet_store_.erase( packet_store_.begin() + (*it) );
         }
     }
@@ -397,7 +426,7 @@ int main() {
     
 
 //    while(true) {
-//    	std::cout << sample_robust_soliton(128) << "\n";
+//    	std::cout << sample_robust_soliton(32) << "\n";
 //    }
     
     std::vector<bool> message(MS);
