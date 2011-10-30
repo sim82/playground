@@ -19,6 +19,37 @@
 #include <cassert>
 #include <boost/dynamic_bitset.hpp>
 
+float randf() {
+	return float(std::rand()) / RAND_MAX;
+}
+
+int sample_ideal_soliton( const int N ) {
+	while(true) {
+		int k = 1 + std::rand() % N;
+		if( k == 1 && randf() <= 1.0/N) {
+			return k;
+		} else if( randf() <= 1.0 / (k*(k-1))) {
+			return k;
+		}
+	}
+}
+
+int sample_robust_soliton( const int N, const float c = 0.05, const float delta = 0.5 ) {
+
+	const float R = c * log(N/delta) * sqrt(N);
+
+	//const float R = N / float(M);
+
+	while(true) {
+		int k = 1 + std::rand() % N;
+		if( k < (N/R) && randf() <= R/(k*N)) {
+			return k;
+		} else if( k == int(N/R) && randf() < R * log(R/delta) / N ) {
+			return k;
+		}
+	}
+}
+
 std::vector<bool> & operator^=( std::vector<bool> &op1, const std::vector<bool> &op2 ) {
  
     assert( op1.size() == op2.size() );
@@ -66,6 +97,28 @@ private:
     block_t block_;    
 };
 
+
+class rand_without_replacement {
+public:
+	rand_without_replacement( const size_t nmax, int seed ) : rnd_list_(nmax) {
+		srand(seed);
+		for( size_t i = 0; i < nmax; ++i ) {
+			rnd_list_[i] = i;
+		}
+		std::random_shuffle( rnd_list_.begin(), rnd_list_.end() );
+	}
+
+	int next() {
+		assert( !rnd_list_.empty());
+		int r = rnd_list_.back();
+		rnd_list_.pop_back();
+		return r;
+	}
+private:
+	std::vector<size_t> rnd_list_;
+
+};
+
 template<size_t message_size, size_t num_blocks>
 class lt_encoder {
 public:
@@ -75,8 +128,8 @@ public:
     typedef std::vector<bool> block_t;
     
     
-    lt_encoder( const message_t &msg ) : message_(msg), seed_(1234) {}
-    
+    lt_encoder( const message_t &msg ) : message_(msg), seed_(std::rand()) {}
+
     block_t get_block( size_t block ) {
      
         assert( block < num_blocks );
@@ -95,8 +148,9 @@ public:
         std::srand(seed_);
 //         size_t degree = 1 + (std::rand() % num_blocks);
         
-        size_t degree = 1 + (std::rand() % 2);
-        
+       // size_t degree = 1 + (std::rand() % 2);
+        //size_t degree = sample_ideal_soliton(num_blocks);
+        size_t degree = sample_robust_soliton(num_blocks);
         
 //         if( std::rand() % 2 == 0 ) {
 //             degree = 1;
@@ -106,18 +160,22 @@ public:
         assert( degree <= num_blocks );
         
 
+
+
         seed_ = std::rand();
+
+        rand_without_replacement rwor(num_blocks, seed_);
         packet<block_size> packet(degree, seed_);
         
-        
-        std::srand(seed_);
+
+        std::cout << "send: ";
         for( size_t i = 0; i < degree; ++i ) {
          
-            size_t block_index = std::rand() % num_blocks;
-            
+            size_t block_index = rwor.next();
+            std::cout << block_index << " ";
             packet.xor_block( get_block(block_index) );
         }
-        
+        std::cout << "\n";
         return packet;
         
     }
@@ -137,16 +195,22 @@ public:
     typedef dec_packet<block_size> dec_packet_t;
     typedef std::vector<bool> block_t;
     
-    dec_packet( const packet<block_size> &p, size_t num_blocks ) 
+    dec_packet( const packet<block_size> &p, size_t num_blocks )
     : block_(p.get_block() )
     {
     
         const size_t degree = p.get_degree();
-        std::srand( p.get_seed() );
+
+
+        rand_without_replacement rwor(num_blocks, p.get_seed());
+
+        std::cout << "recv: ";
         for( size_t i = 0; i < degree; ++i ) {
          
-            index_list_.push_back( std::rand() % num_blocks );
+            index_list_.push_back( rwor.next() );
+            std::cout << index_list_.back() << " ";
         }
+        std::cout << "\n";
         
         
     }
@@ -328,9 +392,13 @@ private:
 
 
 int main() {
-    const size_t NBS = 32;
+    const size_t NBS = 128;
     const size_t MS = NBS * 1024;
     
+
+//    while(true) {
+//    	std::cout << sample_robust_soliton(128) << "\n";
+//    }
     
     std::vector<bool> message(MS);
     
@@ -340,7 +408,9 @@ int main() {
             
         *it = true;
     }
-    
+
+    srand( time(0) );
+    //std::cout << random() << "\n";
     lt_encoder<MS,NBS> lte(message);
     lt_decoder<MS,NBS> ltd;
     
