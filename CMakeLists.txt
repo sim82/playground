@@ -14,6 +14,7 @@ add_executable( bind bind.cpp )
 #add_executable( opencl opencl.cpp )
 add_executable( red_code red_code.cpp )
 add_executable( c_compiler c_compiler.cpp )
+add_executable( bit_fiddle bit_fiddle.cpp )
 
 target_link_libraries(synth jack)
 
