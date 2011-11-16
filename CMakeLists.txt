@@ -5,6 +5,7 @@ SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -std=c++0x")
 add_executable( heap heap.cpp )
 
 add_executable( synth synth.cpp )
+add_executable( reverse_bits reverse_bits.cpp )
 
 add_executable( pool pool.cpp )
 add_executable( pool2 pool2.cpp )
@@ -21,5 +22,6 @@ target_link_libraries(synth jack)
 #target_link_libraries( named_pipe pthread )
 #target_link_libraries( opencl OpenCL )
 target_link_libraries(pool pthread)
+add_executable( compact_vector compact_vector.cpp )
 
 target_link_libraries(pool2 pthread)
