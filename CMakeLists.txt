@@ -5,6 +5,9 @@ SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -std=c++0x")
 add_executable( heap heap.cpp )
 
 add_executable( synth synth.cpp )
+add_executable( watch_tune watch_tune.cpp )
+
+
 
 add_executable( pool pool.cpp )
 add_executable( pool2 pool2.cpp )
@@ -17,6 +20,7 @@ add_executable( c_compiler c_compiler.cpp )
 add_executable( bit_fiddle bit_fiddle.cpp )
 
 target_link_libraries(synth jack)
+target_link_libraries(watch_tune jack)
 
 #target_link_libraries( named_pipe pthread )
 #target_link_libraries( opencl OpenCL )
