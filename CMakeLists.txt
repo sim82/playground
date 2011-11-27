@@ -6,6 +6,7 @@ add_executable( heap heap.cpp )
 
 add_executable( synth synth.cpp )
 add_executable( watch_tune watch_tune.cpp )
+add_executable( reverse_bits reverse_bits.cpp )
 
 
 
@@ -25,5 +26,6 @@ target_link_libraries(watch_tune jack)
 #target_link_libraries( named_pipe pthread )
 #target_link_libraries( opencl OpenCL )
 target_link_libraries(pool pthread)
+add_executable( compact_vector compact_vector.cpp )
 
 target_link_libraries(pool2 pthread)
