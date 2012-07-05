@@ -7,7 +7,10 @@ add_executable( future future.cpp )
 add_executable( heap heap.cpp )
 
 add_executable( synth synth.cpp )
+add_executable( watch_tune watch_tune.cpp )
 add_executable( reverse_bits reverse_bits.cpp )
+
+
 
 add_executable( pool pool.cpp )
 add_executable( pool2 pool2.cpp )
@@ -28,6 +31,7 @@ add_executable( llvm_plf llvm_plf.cpp )
 target_link_libraries(future pthread)
 
 target_link_libraries(synth jack)
+target_link_libraries(watch_tune jack)
 
 #target_link_libraries( named_pipe pthread )
 #target_link_libraries( opencl OpenCL )
