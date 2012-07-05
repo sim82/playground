@@ -6,6 +6,7 @@
 #include <mutex>
 
 #include <cassert>
+#include <unistd.h>
 
 class test {
     int m_v;
