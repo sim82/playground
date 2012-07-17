@@ -11,6 +11,15 @@
 #include <algorithm>
 #include <initializer_list>
 
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <unordered_map>
+
+
+
+using boost::uuids::uuid;
+
+
 template <size_t Name>
 struct member_traits {};
 
@@ -41,6 +50,21 @@ public:
 };
 
 
+class entity_store;
+static entity_store *global_entity_store = nullptr;
+
+class entity_ptr : private uuid {
+public:
+    entity_ptr( const uuid &id ) : uuid(id) {
+        
+    }
+    
+    std::shared_ptr<entity>lock();
+     
+    
+private:
+    std::weak_ptr<entity> wp_;
+};
 
 
 template<typename T, typename... Args>
@@ -51,10 +75,14 @@ std::unique_ptr<T> make_unique(Args&&... args)
 
 class entity {
 public:
-    entity() : members_valid_(false) {}
+    entity( const uuid &id ) : id_(id), members_valid_(false) {}
     
     virtual ~entity() {
         std::cerr << "~entity\n";
+    }
+    
+    const uuid &id() const {
+        return id_;
     }
     
     typedef std::unique_ptr<emember> emember_ptr;
@@ -182,7 +210,7 @@ public:
     }
     
     void run_interactions() {
-        for( auto ip : interactions_ ) {
+        for( auto &ip : interactions_ ) {
             
 //             entity *other = ip.entity2_.get();
 //             if( other == nullptr ) {
@@ -219,17 +247,18 @@ public:
     }
     
 private:
-    
+    const uuid id_;
     
     std::vector<ipair> members_;
     bool members_valid_;
     
     struct interaction {
-        interaction( size_t name1, size_t name2, std::shared_ptr<entity> entity2 ) : name1_(name1), name2_(name2), entity2_(entity2) {}
+        interaction( size_t name1, size_t name2, std::shared_ptr<entity> entity2 ) : name1_(name1), name2_(name2), entity2_(entity2->id()) {}
         
         size_t name1_;
         size_t name2_;
-        std::weak_ptr<entity> entity2_;
+        //std::weak_ptr<entity> entity2_;
+        entity_ptr entity2_;
     };
     std::vector<interaction> interactions_;
 };
@@ -351,15 +380,123 @@ std::unique_ptr<emember> member_factory( size_t name ) {
 }
 #undef ENTITY_FACTORY_CASE
 
+
+/////////////////////////////////////////////////////////////////////////////////
+namespace std {
+    
+    template<>
+    struct hash<uuid> : public __hash_base<size_t, uuid>
+    {
+        size_t
+        operator()( const uuid &id ) const noexcept
+        {
+            return hash_value( id );
+        }
+    };
+}
+
+
+class entity_store {
+public:
+    
+    entity_store() {
+        
+    }
+    
+    std::shared_ptr<entity> create() {
+        auto id = uuid_generator_();
+        
+        auto it = entity_map_.emplace( id, std::make_shared<entity>(id) );
+        
+        assert( it.second ); // make sure that there was not already an entity with the same uuid in the map
+        return it.first->second; // it.first is a map iterator -> it.first->second is the value
+    }
+    
+    std::shared_ptr<entity>get( const uuid &id ) {
+        auto it = entity_map_.find( id );
+        
+        if( it == entity_map_.end() ) {
+            return nullptr;
+        }
+        
+        return it->second;
+        
+    }
+    
+private:
+    std::unordered_map<uuid, std::shared_ptr<entity>> entity_map_;
+    boost::uuids::random_generator uuid_generator_;
+};
+
+std::shared_ptr<entity>entity_ptr::lock() {
+    auto sp = wp_.lock();
+    
+    if( sp == nullptr ) {
+        std::cout << "lookup\n";
+        wp_ = ( global_entity_store->get( *this ));
+        sp = wp_.lock();
+        
+    }
+    
+    
+    if( sp == nullptr ) {
+        throw std::runtime_error( "bad entity ptr" );
+    }
+    
+    return sp;
+}
+
+
+
+
+
+
+
+int main2() {
+    entity_store es;
+    
+    
+    auto a = es.create();
+    
+    return 0;
+}
+
+
+
+
 int main() {
-    auto a(std::make_shared<entity>());
+    
+    
+    
+//     boost::uuids::random_generator uuid_generator;
+    
+//     auto a(std::make_shared<entity>( uuid_generator() ));
 //     auto c(std::make_shared<entity>());
     //std::shared_ptr<entity> a(std::make_shared<entity>());
     
+    entity_store es;
+    global_entity_store = &es;
+    
+    
+    
+    auto a = es.create();
+    
+    
+    entity_ptr ap( a->id() );
+    
+    
+    auto ax = ap.lock();
+    
+//     std::shared_ptr<entity> xp(es.create());
+//     std::weak_ptr<entity> wp( xp );
+//     std::cout << (wp.lock() == nullptr) << "\n";
+    
     a->add_member<ID_TYPE1>( make_unique<member_type1>() );   
     //a.add_member<ID_TYPE2>( std::make_shared<member_type2>() );   
-    a->make_member<ID_TYPE2>( 7, 8 );   
-    auto b = std::make_shared<entity>();
+    ap.lock()->make_member<ID_TYPE2>( 7, 8 );   
+//     auto b = std::make_shared<entity>(uuid_generator());
+    
+    auto b = es.create();
     
    // a.add_member<ID_TYPE1>( std::make_shared<member_type1>() );   
     //b.add_member<ID_TYPE3>( std::make_shared<member_type3>() );   
@@ -380,10 +517,11 @@ int main() {
     
     a->add_interaction( ID_TYPE1, a, ID_TYPE2 );
     a->add_interaction( ID_TYPE1, b, ID_TYPE3 );
-    a->run_interactions();
     
+    a->run_interactions();
+    a->run_interactions();
     b.reset();
     a->run_interactions();
     
-    
+    return 0;
 }
