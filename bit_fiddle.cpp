@@ -11,7 +11,7 @@
 #include <fcntl.h>
 #include <map>
 #include <sys/mman.h>
-
+#include <unistd.h>
 
 typedef int (*func_t)(int);
 
@@ -287,7 +287,7 @@ public:
 
 	~posix_file() {
 		if( good() ) {
-			close( fd_ );
+			::close( fd_ );
 		}
 	}
 

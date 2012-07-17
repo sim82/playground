@@ -12,6 +12,8 @@
 #include <bitset>
 #include <iostream>
 
+
+
 #include <cstdint>
 #include <cstdlib>
 #include <cassert>
@@ -87,6 +89,8 @@ int funcx( int v ) {
 }
 
 int main() {
+
+//     test_boost_bitset();
 
     std::cout << funcx(17) << " " << funcx(7) << "\n";
 

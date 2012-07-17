@@ -1,23 +1,29 @@
 SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -std=c++0x")
 
+# add_executable( object_hog object_hog.cpp )
+# target_link_libraries( object_hog ivymike )
+
 #add_executable( map map_test.cpp )
-
+add_executable( atomic atomic.cpp )
 add_executable( heap heap.cpp )
-
-add_executable( synth synth.cpp )
+add_executable( bitset bitset.cpp )
+#add_executable( synth synth.cpp )
 add_executable( reverse_bits reverse_bits.cpp )
 
 add_executable( pool pool.cpp )
 add_executable( pool2 pool2.cpp )
 add_executable( bind bind.cpp )
 #add_executable( named_pipe named_pipe.cpp )
-
+add_executable( entity entity.cpp )
+add_executable( entity_nonshared entity_nonshared.cpp )
 #add_executable( opencl opencl.cpp )
 add_executable( red_code red_code.cpp )
 add_executable( c_compiler c_compiler.cpp )
 add_executable( bit_fiddle bit_fiddle.cpp )
 
-target_link_libraries(synth jack)
+add_executable( boost_math boost_math.cpp )
+add_executable( fixed fixed.cpp )
+#target_link_libraries(synth jack)
 
 #target_link_libraries( named_pipe pthread )
 #target_link_libraries( opencl OpenCL )
