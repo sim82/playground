@@ -4,7 +4,7 @@ LINK_DIRECTORIES( /usr/lib/llvm )
 # add_executable( object_hog object_hog.cpp )
 # target_link_libraries( object_hog ivymike )
 
-add_executable( future future.cpp )
+#add_executable( future future.cpp )
 #add_executable( map map_test.cpp )
 add_executable( atomic atomic.cpp )
 add_executable( heap heap.cpp )
@@ -25,14 +25,14 @@ add_executable( entity_nonshared entity_nonshared.cpp )
 add_executable( red_code red_code.cpp )
 add_executable( c_compiler c_compiler.cpp )
 add_executable( bit_fiddle bit_fiddle.cpp )
-add_executable( rand rand.cpp )
+#add_executable( rand rand.cpp )
 
 add_executable( framebuffer framebuffer.cpp )
 add_executable( emator emator.cpp )
 add_executable( llvm_plf llvm_plf.cpp )
 
 
-target_link_libraries(future pthread)
+#target_link_libraries(future pthread)
 
 add_executable( boost_math boost_math.cpp )
 target_link_libraries(watch_tune jack)
