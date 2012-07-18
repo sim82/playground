@@ -10,7 +10,7 @@ add_executable( atomic atomic.cpp )
 add_executable( heap heap.cpp )
 add_executable( bitset bitset.cpp )
 #add_executable( synth synth.cpp )
-add_executable( watch_tune watch_tune.cpp )
+#add_executable( watch_tune watch_tune.cpp )
 add_executable( reverse_bits reverse_bits.cpp )
 
 
@@ -29,15 +29,17 @@ add_executable( bit_fiddle bit_fiddle.cpp )
 
 add_executable( framebuffer framebuffer.cpp )
 add_executable( emator emator.cpp )
-add_executable( llvm_plf llvm_plf.cpp )
+#add_executable( llvm_plf llvm_plf.cpp )
 
 
 #target_link_libraries(future pthread)
 
 add_executable( boost_math boost_math.cpp )
-target_link_libraries(watch_tune jack)
+#target_link_libraries(watch_tune jack)
 add_executable( fixed fixed.cpp )
 #target_link_libraries(synth jack)
+
+add_executable( id_map id_map.cpp )
 
 #target_link_libraries( named_pipe pthread )
 #target_link_libraries( opencl OpenCL )
@@ -48,4 +50,4 @@ target_link_libraries(pool2 pthread)
 target_link_libraries(framebuffer X11 )
 
 
-target_link_libraries( llvm_plf pthread ffi dl m LLVMInterpreter LLVMX86Disassembler LLVMX86AsmParser LLVMX86CodeGen LLVMSelectionDAG LLVMAsmPrinter LLVMMCParser LLVMX86Desc LLVMX86Info LLVMX86AsmPrinter LLVMX86Utils LLVMJIT LLVMRuntimeDyld LLVMExecutionEngine LLVMCodeGen LLVMScalarOpts LLVMInstCombine LLVMTransformUtils LLVMipa LLVMAnalysis LLVMTarget LLVMMC LLVMObject LLVMCore LLVMSupport)
+#target_link_libraries( llvm_plf pthread ffi dl m LLVMInterpreter LLVMX86Disassembler LLVMX86AsmParser LLVMX86CodeGen LLVMSelectionDAG LLVMAsmPrinter LLVMMCParser LLVMX86Desc LLVMX86Info LLVMX86AsmPrinter LLVMX86Utils LLVMJIT LLVMRuntimeDyld LLVMExecutionEngine LLVMCodeGen LLVMScalarOpts LLVMInstCombine LLVMTransformUtils LLVMipa LLVMAnalysis LLVMTarget LLVMMC LLVMObject LLVMCore LLVMSupport)
