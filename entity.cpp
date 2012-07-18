@@ -4,6 +4,7 @@
 #include <iostream>
 #include <algorithm>
 #include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
 #include "entity.h"
 #include "entity_member1.h"
@@ -124,6 +125,7 @@ void dispatch_interaction( const entity &e1, const entity &e2, size_t name1, siz
 
 
 emember& entity::member_unchecked(size_t name) const {
+#if 0
     assert( members_valid_ );
     auto it = std::lower_bound( members_.begin(), members_.end(), ipair( name, 0 ));
     
@@ -132,8 +134,16 @@ emember& entity::member_unchecked(size_t name) const {
     
     
     return *it->value_;
+#endif
+    auto mp = member_map_.find(name);
+    
+    assert( mp != member_map_.end() );
+    
+    return *(*mp);
 }
 emember& entity::member_unchecked(size_t name) {
+    
+#if 0
     if( !members_valid_ ) {
         std::sort( members_.begin(), members_.end() );
         members_valid_ = true;
@@ -146,8 +156,16 @@ emember& entity::member_unchecked(size_t name) {
     
     
     return *it->value_;
+#endif
+    auto mp = member_map_.find(name);
+    
+    assert( mp != member_map_.end() );
+    
+    return *(*(mp));
+    
 }
 void entity::add_member_unchecked(size_t name, std::unique_ptr< emember > m) {
+#if 0
     members_.push_back( ipair( name, std::move(m) ));
     members_valid_ = false;
     
@@ -157,6 +175,11 @@ void entity::add_member_unchecked(size_t name, std::unique_ptr< emember > m) {
         std::sort( members_.begin(), members_.end() );
         members_valid_ = true;
     }
+#endif
+    bool b = member_map_.set( name, std::move(m) );
+    assert( b );
+    
+
 }
 void entity::fabricate_member(size_t name) {
     add_member_unchecked( name, member_factory(name));
@@ -199,9 +222,24 @@ void entity::run_interactions() {
         }
     }
 entity::~entity() {
+    print_info();
+    
     std::cerr << "~entity\n";
 }
+
+void entity::print_info() {
+    std::cout << "entity: " << id_ << "\n";
+    
+    for( size_t i = 0; i <= member_map_.max_id(); ++i ) {
+        auto it = member_map_.find(i);
+        if( it != member_map_.end() ) {
+            std::cout << "member " << i << " " << it->get() << "\n";
+        }
+    }
+}
+
 emember::~emember() {}
 entity_store::~entity_store() {}
+
 
 

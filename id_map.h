@@ -1,3 +1,6 @@
+#ifndef __id_map_h
+#define __id_map_h
+
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -5,121 +8,7 @@
 #include <iostream>
 #include <array>
 #include <algorithm>
-#include <memory>
-// #include <type_traits>
-#include "id_map.h"
 
-template<typename K, typename V>
-class flat_map {
-public:
-    flat_map() : sorted_(true) {}
-    
-    void sort() {
-        if( !sorted_ ) {
-            std::sort( pairs_.begin(), pairs_.end() );
-            sorted_ = true;
-        }
-    }
-    
-    void put_fast( const K &key, const V &value ) {
-        pairs_.emplace_back( key, value );
-        
-        sorted_ = false;
-    }
-    
-    void put_fast( const K &key, V &&value ) {
-        pairs_.emplace_back( key, value );
-        
-        sorted_ = false;
-    }
-    template<typename... Args>
-    void emplace_fast( const K &key, Args&&... args) {
-        pairs_.emplace_back( key, args... );
-        
-        sorted_ = false;
-    
-    }
-    
-    
-    void put( const K &key, const V &value ) {
-        if( !sorted_ ) {
-            throw std::runtime_error( "flat_map::put on unsorted map" );
-        }
-        
-        ipair p{key, value};
-        auto lb = std::lower_bound( pairs_.begin(), pairs_.end(), p );
-        
-        pairs_.insert(lb, std::move(p));
-    }
-    
-    const V * get( const K &key ) const {
-        if( !sorted_ ) {
-            throw std::runtime_error( "flat_map::get on unsorted map" );
-        }
-        auto lb = std::lower_bound( pairs_.begin(), pairs_.end(), ipair{key, V()} );
-        
-        if( lb == pairs_.end() || lb->key_ != key ) {
-            return nullptr;
-        } else {
-            return &lb->value_;
-        }
-    }
-    
-    void reserve( size_t s ) {
-        pairs_.reserve(s);
-    }
-        
-    
-private:
-    struct ipair {
-        K key_;
-        V value_;
-        
-        ipair( const K &key, const V &value ) : key_(key), value_(value) {}
-        
-        
-        inline bool operator<( const ipair &other ) const {
-            return key_ < other.key_;
-        }
-        
-        
-    };
-    
-    
-    std::vector<ipair> pairs_;
-    bool sorted_;
-};   
-    
-
-template<typename Value>
-class id_map_sorted : private flat_map<size_t,Value> {
-public:
-    typedef const Value *iterator;
-    
-    bool set( size_t id, Value v ) {
-        flat_map<size_t,Value>::put(id,v);
-        
-        return true;
-    }
-    
-    iterator find( size_t id ) {
-        return flat_map<size_t,Value>::get(id);
-    }
-    
-    
-    iterator end() {
-        return nullptr;
-    }
-    
-    static size_t max_id() {
-        return 63;
-    }
-private:
-  
-    
-};
-
-#if 0
 
 template<typename Value, size_t max_num, typename Bitfield = uint64_t >
 class id_map_fixed {
@@ -234,25 +123,51 @@ private:
 
 
 template<typename Value>
-class id_map {
+class id_map_dynamic {
 public:
     typedef uint64_t bitfield_t;
     
-    id_map() 
+    id_map_dynamic() 
      : bits_(0)
     {
         
     }
     
     typedef typename std::vector<Value>::iterator iterator;
+    typedef typename std::vector<Value>::const_iterator const_iterator;
     
+    inline const_iterator end() const {
+        return values_.end();
+    }
     
     inline iterator end() {
         return values_.end();
     }
     
-    inline bool set( size_t id, Value v ) {
+    inline bool set( size_t id, Value &&v ) {
         
+        assert( id <= max_id());
+        bitfield_t mask = id_mask(id);
+        
+        size_t idx = index(id);
+        
+        if( (bits_ & mask) != 0 ) {
+//             std::cout << "replace\n";
+            values_[idx] = std::move(v);
+        } else {
+            bits_ |= mask;
+            auto it = values_.begin() + idx;
+            
+            values_.emplace(it, std::move(v));
+        }
+        
+        return true;
+//          std::cout << "bits: " << id << " " << mask << "\n";
+    }
+    
+    inline bool set( size_t id, const Value &v ) {
+        assert( id <= max_id());
+#if 1
         bitfield_t mask = id_mask(id);
         
         size_t idx = index(id);
@@ -269,9 +184,11 @@ public:
         
         return true;
 //          std::cout << "bits: " << id << " " << mask << "\n";
+#endif
     }
     
     inline void remove( size_t id ) {
+        assert( id <= max_id());
         bitfield_t mask = id_mask(id);
         
         size_t idx = index(id);
@@ -283,6 +200,22 @@ public:
         }
     }
     
+    inline const_iterator find( size_t id ) const {
+        assert( id <= max_id());
+        bitfield_t mask = id_mask(id);
+        
+        if( (bits_ & mask) == 0 ) {
+            //throw std::runtime_error( "bad id" );
+            
+            return values_.end();
+        } 
+        
+        size_t idx = index(id);
+        
+//         std::cout << "find: " << id << " " << idx << "\n";
+        
+        return values_.begin() + idx;
+    }
     inline iterator find( size_t id ) {
         bitfield_t mask = id_mask(id);
         
@@ -298,16 +231,17 @@ public:
         
         return values_.begin() + idx;
     }
+    
     inline static size_t max_id() {
         return sizeof(bitfield_t) * 8 - 1;
     }
 private:
     
-    inline uint64_t id_mask( size_t id ) {
+    inline uint64_t id_mask( size_t id ) const {
         return bitfield_t(1) << (id + 1);
     }
     
-    inline size_t index( size_t id ) {
+    inline size_t index( size_t id ) const {
         uint64_t mask = bitfield_t(-1) >> (num_bits_ - id - 1);
         
 //         std::cout << "mask: " << mask << " " << id << "\n";
@@ -364,127 +298,4 @@ private:
     
 };
 
-#endif
-
-template<typename Map>
-void read_bench( Map & im ) {
-    
-    size_t num_set = 0;
-    size_t count = 0;
-    size_t max_id = im.max_id();
-    while( true ) {
-     //   size_t id = rand() % max_id;
-        size_t id = count % max_id;
-        auto it = im.find(id);
-        
-        if( it != im.end() ) {
-            ++num_set;
-        } 
-        ++count;
-        
-        if( count % 100000000 == 0 ) {
-            for( size_t i = 0; i < max_id; ++i ) {
-                auto it = im.find(i);
-                if( it != im.end() ) {
-//                     std::cout << i << ": " << *(im.find(i)) << "\n";
-                   ++num_set;
-                   if( *it != i ) {
-                       std::cout << "meeeep: " << i << " " << *it << "\n";
-                       getchar();
-                   }
-                }
-            }
-            
-            std::cout << "num: " << num_set << "\n";
-        }
-        
-//         getchar();
-    }
-    
-}
-
-#if 1
-int main() {
-//     return 0;
-    
-    std::vector<std::unique_ptr<size_t>> v;
-    
-    std::unique_ptr<size_t> p;
-    v.push_back(std::move(p));
-    
-    typedef id_map_fixed<int, 5> id_map_t;
-//     typedef id_map<int> id_map_t;
-//     typedef id_map_sorted<int> id_map_t;
-//     typedef id_map_vanilla<int,64> id_map_t;
-    id_map_t im;
-    
-//     std::cout << sizeof( im2 ) << " " << sizeof( im ) << "\n";
-    
-//     id_map_vanilla<int,64> im;
-    size_t max_id = im.max_id();
-    size_t count = 0;
-    
-    for( size_t i = 0; i < 5; ++i ) {
-        size_t id = rand() % max_id;
-        bool b = im.set(id,id);
-        
-        std::cout << b << "\n";
-        
-    }
-    
-    
-    std::vector<id_map_t> tv;
-    
-    while( tv.size() < 10000000 ) {
-        tv.push_back( im );
-    }
-  
-    
-    read_bench(im);
-    
-    
-    
-    
-    return 0;
-#if 0
-    while( true ) {
-        size_t id = rand() % max_id;
-//         size_t id = count % 31;
-        auto it = im.find(id);
-        
-        if( it == im.end() ) {
-            im.set( id, id );
-//             std::cout << "set: " << id << "\n";
-        } else {
-            im.remove( id );
-        }
-        
-        ++count;
-        size_t num_set = 0;
-        if( count % 100000000 == 0 ) {
-            for( size_t i = 0; i < max_id; ++i ) {
-                auto it = im.find(i);
-                if( it != im.end() ) {
-//                     std::cout << i << ": " << *(im.find(i)) << "\n";
-                   ++num_set;
-                   if( *it != i ) {
-                       std::cout << "meeeep: " << i << " " << *it << "\n";
-                       getchar();
-                   }
-                }
-            }
-            
-            std::cout << "num: " << num_set << "\n";
-        }
-        
-//         getchar();
-    }
-    im.set(32, 32);
-    im.set(2, 2);
-    std::cout << "get: " << *(im.find(2)) << "\n";
-    
-    im.remove(2);
-    std::cout << "get: " << *(im.find(32)) << "\n";
-#endif
-}
 #endif

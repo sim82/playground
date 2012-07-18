@@ -14,6 +14,7 @@
 #include <boost/uuid/uuid.hpp>
 // #include <boost/random/mersenne_twister.hpp>
 #include <unordered_map>
+#include "id_map.h"
 
 
 
@@ -99,7 +100,7 @@ private:
 
 class entity {
 public:
-    entity( const uuid &id ) : id_(id), members_valid_(false) {}
+    entity( const uuid &id ) : id_(id) {}
     
     virtual ~entity();
     
@@ -109,6 +110,8 @@ public:
     
     typedef std::unique_ptr<emember> emember_ptr;
 //     typedef std::pair<size_t,emember_ptr> ekv;
+    
+#if 0
     struct ipair {
         typedef size_t K;
         typedef emember_ptr V;
@@ -124,7 +127,7 @@ public:
         
         
     };
-    
+#endif
     
     ///////////////////////////////////////////////////////////////////////////
     // dynamic/unchecked member access methods (for automatic construction, 
@@ -148,21 +151,30 @@ public:
     typename member_traits<name>::member_type &member() const {
         emember &m = member_unchecked( member_traits<name>::value );
         
+        
+        // doing the dynamic cast + error check here is just a precaution in case someone messes up the entity with 
+        // an unchecked add. Ideally, a static cast is enough, because the members as statically checked
+        // upon insertion.
+        // for release builds it could be replaced by a static cast.
         auto p = dynamic_cast<typename member_traits<name>::member_type *>(&m);
        
-        assert( p != nullptr );
+        if( p == nullptr ) {
+            throw std::runtime_error( "dynamic_cast failed during statically checked member access. member map is messed up..." );
+        }
         return *p;
         //         return std::static_pointer_cast<typename member_traits<name>::member_type>( member_unchecked( member_traits<name>::value ));
     }
 
     template<size_t name>
     typename member_traits<name>::member_type &member() {
-        // doing the dynamic cast + error check here is just a precaution in case someone messes up the entity with 
-        // an unchecked add. Ideally, a static cast is enough, because the members as statically checked
-        // upon insertion.
+        // dynamic_cast: d.t.o.
         
         auto p = dynamic_cast<typename member_traits<name>::member_type *>( &member_unchecked( member_traits<name>::value ));
-        assert( p != nullptr );
+        
+        if( p == nullptr ) {
+            throw std::runtime_error( "dynamic_cast failed during statically checked member access. member map is messed up..." );
+        }
+//         assert( p != nullptr );
         return *p;
 //         return std::static_pointer_cast<typename member_traits<name>::member_type>( member_unchecked( member_traits<name>::value ));
     }
@@ -195,11 +207,16 @@ public:
     
     void fabricate_members( std::initializer_list<size_t> names ) ;
     
+    
+    void print_info() ;
+        
 private:
     const uuid id_;
     
-    std::vector<ipair> members_;
-    bool members_valid_;
+//     std::vector<ipair> members_;
+//     bool members_valid_;
+    
+    id_map_dynamic<emember_ptr> member_map_;
     
     struct interaction {
         interaction( size_t name1, size_t name2, std::shared_ptr<entity> entity2 ) : name1_(name1), name2_(name2), entity2_(entity2->id()) {}
