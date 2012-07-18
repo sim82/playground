@@ -43,9 +43,9 @@ int main() {
 //     std::weak_ptr<entity> wp( xp );
 //     std::cout << (wp.lock() == nullptr) << "\n";
     
-    a->add_member<ID_TYPE1>( make_unique<member_type1>() );   
+    a->add_member( make_unique<member_type1>() );   
     //a.add_member<ID_TYPE2>( std::make_shared<member_type2>() );   
-    ap.lock()->make_member<ID_TYPE2>( 7, 8 );   
+    ap.lock()->make_member<member_type2>( 7, 8 );   
 //     auto b = std::make_shared<entity>(uuid_generator());
     
     auto b = es.create();
@@ -56,7 +56,7 @@ int main() {
 //     b.add_member_unchecked( ID_TYPE3, std::make_shared<member_type2>() );   
     
     auto &x = a->member<ID_TYPE1>();
-    member_type2 &y = a->member<ID_TYPE2>();
+    member_type2 &y = a->member<member_type2>();
     
     //member_interaction<ID_TYPE1,ID_TYPE2>( a, a );
     member_interaction<ID_TYPE1,ID_TYPE3>( *a, *b );

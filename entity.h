@@ -46,13 +46,23 @@ const static size_t ID_TYPE_LAST = 3;
 template <size_t Name>
 struct member_traits {};
 
+template <typename MType>
+struct member_traits2 {};
+
 #define ENTITY_DECLARE_MEMBER_TRAITS(T, member_name ) \
 template<>                                            \
 struct member_traits<member_name>                     \
 {                                                     \
     enum { value = member_name };                     \
     typedef T member_type;                            \
+};                                                    \
+template<>                                            \
+struct member_traits2<T>                              \
+{                                                     \
+   enum { value = member_name };                      \
+    typedef T member_type;                            \
 };
+
 
 class member_type2;
 class member_type3;
@@ -179,6 +189,18 @@ public:
 //         return std::static_pointer_cast<typename member_traits<name>::member_type>( member_unchecked( member_traits<name>::value ));
     }
 
+    
+    template<typename MType>
+    MType &member() {
+         size_t name = member_traits2<MType>::value;
+         auto p = dynamic_cast<MType *>( &member_unchecked( name ));
+        
+         if( p == nullptr ) {
+             throw std::runtime_error( "dynamic_cast failed during statically checked member access. member map is messed up..." );
+         }
+//         assert( p != nullptr );
+        return *p;
+    }
 
     template<size_t name>
     void add_member( std::unique_ptr<typename member_traits<name>::member_type> m ) {
@@ -186,11 +208,20 @@ public:
         add_member_unchecked( name, std::move(m) );
     }
     
+    template<typename MType>
+    void add_member( std::unique_ptr<MType> m ) {
+        // the call got through static typecheck, so it's safe to hand over to 'dynamic polymorphism mode'...
+        add_member_unchecked( member_traits2<MType>::value, std::move(m) );
+    }
+    
     template<size_t Name,typename... Args>
     void make_member(Args&&... args) {
         return add_member<Name>(make_unique<typename member_traits<Name>::member_type>(std::forward<Args>(args)...));
     }
-    
+    template<typename MType,typename... Args>
+    void make_member(Args&&... args) {
+        return add_member<member_traits2<MType>::value>(make_unique<MType>(std::forward<Args>(args)...));
+    }
     
     // interaction management stuff
     void add_interaction( size_t name1, std::shared_ptr<entity> entity2, size_t name2 ) ;
