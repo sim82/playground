@@ -7,17 +7,17 @@
 #include <boost/uuid/uuid_io.hpp>
 
 #include "entity.h"
-#include "entity_member1.h"
-#include "entity_member3.h"
+// #include "entity_member1.h"
+// #include "entity_member3.h"
 
-entity_store *global_entity_store = nullptr;
+entity_store *entity_ptr::global_store = nullptr;
 
 std::shared_ptr<entity> entity_ptr::lock() {
     auto sp = wp_.lock();
     
     if( sp == nullptr ) {
         std::cout << "lookup\n";
-        wp_ = ( global_entity_store->get( *this ));
+        wp_ = ( global_store->get( *this ));
         sp = wp_.lock();
         
     }
@@ -35,7 +35,23 @@ std::shared_ptr<entity> entity_ptr::lock() {
 
 class entity_store::uuid_generator : private boost::uuids::random_generator {
 public:
+    uuid_generator() : boost::uuids::random_generator(ran_) {
+        // by default uuids::random_generator generator would use some (garbage) data to
+        // seed the rng. I think this is a horrible idea, as it messes up valgrind 
+        // (and I don't want to define valgrind exceptions for every rng). Also
+        // how can they be sure that the garbage data is really less deterministic
+        // than a simple timestamp... is there any proof or is this just handwaving?
+        
+        // If a simple time is no good enough I would rather depend on something 
+        // timing dependent (like the number of nano seconds spent in a usleep(10) call etc.
+        
+        ran_.seed(time(NULL));
+    }
+    
     using boost::uuids::random_generator::operator();
+private:
+    boost::mt19937 ran_;
+    //ran.seed(time(NULL)); // one should likely seed in a better way
 };
 
 entity_store::entity_store() 
@@ -68,59 +84,12 @@ std::shared_ptr<entity> entity_store::get(const uuid& id) {
 
 
 
-void member_interaction( member_type1 &m1, member_type2 &m2 ) {
-    std::cout << "blub 1 2\n";
-    
-    std::cout << "m2: ";
-    m2.test();
-}
-
-void member_interaction( member_type1 &m1, member_type1 &m2 ) {
-    std::cout << "blub 1 1\n";
-}
-
-void member_interaction( member_type1 &m1, member_type3 &m2 ) {
-    std::cout << "blub 1 3\n";
-    m2.test();
-}
 
 
 
 
 
 
-
-// a small dose of preprocessor magick to remove redundancy
-#define ENTITY_FACTORY_CASE( ID ) case ID: return member_factory<ID>();
-
-std::unique_ptr<emember> member_factory( size_t name ) {
-    
-    switch( name ) {
-        ENTITY_FACTORY_CASE( ID_TYPE1 )
-        ENTITY_FACTORY_CASE( ID_TYPE2 )
-        ENTITY_FACTORY_CASE( ID_TYPE3 )
-    default:
-        throw std::runtime_error( "unimplemented entity member factory" );
-    
-    };
-}
-#undef ENTITY_FACTORY_CASE
-
-
-#define MEMBER_TYPE_PAIR_CASE( ID1, ID2 ) case ID1 * ID_TYPE_LAST + ID2: member_interaction<ID1,ID2>(e1,e2); break;
-
-void dispatch_interaction( const entity &e1, const entity &e2, size_t name1, size_t name2 ) {
-    switch( name1 * ID_TYPE_LAST + name2 ) {
-        MEMBER_TYPE_PAIR_CASE(ID_TYPE1,ID_TYPE1)
-        MEMBER_TYPE_PAIR_CASE(ID_TYPE1,ID_TYPE2)
-        MEMBER_TYPE_PAIR_CASE(ID_TYPE1,ID_TYPE3)
-        default:
-            throw std::runtime_error( "unimplemented entity member interaction" );            
-          
-    }
-}
-
-#undef MEMBER_TYPE_PAIR_CASE
 
 
 
@@ -222,7 +191,7 @@ void entity::run_interactions() {
         }
     }
 entity::~entity() {
-    print_info();
+//     print_info();
     
     std::cerr << "~entity\n";
 }

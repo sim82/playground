@@ -1,8 +1,14 @@
 #include <iostream>
 
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include <boost/random/mersenne_twister.hpp>
 #include "entity.h"
+#include "entity_custom.h"
 #include "entity_member1.h"
 #include "entity_member3.h"
+
+
 
 int main2() {
     entity_store es;
@@ -27,7 +33,7 @@ int main() {
     //std::shared_ptr<entity> a(std::make_shared<entity>());
     
     entity_store es;
-    global_entity_store = &es;
+    entity_ptr::global_store = &es;
     
     
     
@@ -74,6 +80,9 @@ int main() {
     a->run_interactions();
     b.reset();
     a->run_interactions();
+    
+    
+    a->print_info();
     
     return 0;
 }

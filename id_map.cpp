@@ -5,6 +5,7 @@
 #include <iostream>
 #include <array>
 #include <algorithm>
+#include <cassert>
 #include <memory>
 // #include <type_traits>
 #include "id_map.h"
@@ -316,7 +317,6 @@ private:
         
         //return __builtin_popcountll(mask & bits_);
         return __builtin_popcountll(mask & bits_);
-        
     }
     
     
@@ -388,7 +388,7 @@ void read_bench( Map & im ) {
                 if( it != im.end() ) {
 //                     std::cout << i << ": " << *(im.find(i)) << "\n";
                    ++num_set;
-                   if( *it != i ) {
+                   if( *it != int(i) ) {
                        std::cout << "meeeep: " << i << " " << *it << "\n";
                        getchar();
                    }
@@ -406,11 +406,15 @@ void read_bench( Map & im ) {
 #if 1
 int main() {
 //     return 0;
-    
-    std::vector<std::unique_ptr<size_t>> v;
-    
-    std::unique_ptr<size_t> p;
-    v.push_back(std::move(p));
+
+    {
+        id_map_dynamic<std::unique_ptr<int>> im;
+        
+//         std::shared_ptr<int> p1;
+       // im.set(1,std::make_shared<int>(0));
+        im.set(1,std::unique_ptr<int>(nullptr));
+//         im.set(1,p1);
+    }
     
     typedef id_map_fixed<int, 5> id_map_t;
 //     typedef id_map<int> id_map_t;
@@ -422,7 +426,7 @@ int main() {
     
 //     id_map_vanilla<int,64> im;
     size_t max_id = im.max_id();
-    size_t count = 0;
+//     size_t count = 0;
     
     for( size_t i = 0; i < 5; ++i ) {
         size_t id = rand() % max_id;

@@ -5,6 +5,7 @@
 
 #include "entity.h"
 
+
 class member_type2 : public emember {
 public:
     member_type2() : y(0), z(0) {}

@@ -144,8 +144,10 @@ public:
         return values_.end();
     }
     
-    inline bool set( size_t id, Value &&v ) {
-        
+    
+    
+    template<typename... Args>
+    inline bool emplace( size_t id, Args&&... args) {
         assert( id <= max_id());
         bitfield_t mask = id_mask(id);
         
@@ -153,38 +155,36 @@ public:
         
         if( (bits_ & mask) != 0 ) {
 //             std::cout << "replace\n";
-            values_[idx] = std::move(v);
+            
+            values_[idx] = Value(std::forward<Args>(args)...);
         } else {
             bits_ |= mask;
             auto it = values_.begin() + idx;
             
-            values_.emplace(it, std::move(v));
+           // values_.emplace(it, std::move(v));
+            values_.emplace(it, std::forward<Args>(args)...);
         }
         
         return true;
-//          std::cout << "bits: " << id << " " << mask << "\n";
     }
     
-    inline bool set( size_t id, const Value &v ) {
-        assert( id <= max_id());
-#if 1
-        bitfield_t mask = id_mask(id);
-        
-        size_t idx = index(id);
-        
-        if( (bits_ & mask) != 0 ) {
-//             std::cout << "replace\n";
-            values_[idx] = v;
-        } else {
-            bits_ |= mask;
-            auto it = values_.begin() + idx;
-            
-            values_.insert(it, v);
-        }
-        
-        return true;
-//          std::cout << "bits: " << id << " " << mask << "\n";
-#endif
+    // CHECK: did I understand this correctly: implementing const & and && setter in terms of emplace is 'the right thing' in c++11?
+//     inline bool set( size_t id, Value &&v ) {
+//         return emplace( id, std::move(v));
+//     }
+    
+    
+    
+//     inline bool set( size_t id, const Value &v ) {
+//         std::cout << "copy set\n";
+//         return emplace( id, v );
+//     }
+
+// CHECK2: can this thing really replace all setters?
+    template<typename T1>
+    inline bool set( size_t id, T1 &&v ) {
+//         std::cout << "forward\n";
+        return emplace( id, std::forward<T1>(v));
     }
     
     inline void remove( size_t id ) {

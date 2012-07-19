@@ -7,9 +7,7 @@
 #include <array>
 #include <memory>
 #include <vector>
-
 #include <initializer_list>
-
 
 #include <boost/uuid/uuid.hpp>
 // #include <boost/random/mersenne_twister.hpp>
@@ -23,7 +21,7 @@ using boost::uuids::uuid;
 
 class entity;
 class entity_store;
-extern entity_store *global_entity_store;
+
 
 template<typename T, typename... Args>
 std::unique_ptr<T> make_unique(Args&&... args)
@@ -32,14 +30,6 @@ std::unique_ptr<T> make_unique(Args&&... args)
 }
 
 
-/////////////////////////////////////////////////////////////////
-// define entity member types and map them to their traits
-/////////////////////////////////////////////////////////////////
-
-const static size_t ID_TYPE1 = 0;
-const static size_t ID_TYPE2 = 1;
-const static size_t ID_TYPE3 = 2;
-const static size_t ID_TYPE_LAST = 3;
 
 
 
@@ -64,15 +54,7 @@ struct member_traits2<T>                              \
 };
 
 
-class member_type2;
-class member_type3;
-class member_type1;
-
-ENTITY_DECLARE_MEMBER_TRAITS(member_type1, ID_TYPE1)
-ENTITY_DECLARE_MEMBER_TRAITS(member_type2, ID_TYPE2)
-ENTITY_DECLARE_MEMBER_TRAITS(member_type3, ID_TYPE3)
-
-#undef ENTITY_DECLARE_MEMBER_TRAITS
+// #undef ENTITY_DECLARE_MEMBER_TRAITS
 
 
 //////////////////////////////////////////////////
@@ -96,6 +78,8 @@ void dispatch_interaction( const entity &e1, const entity &e2, size_t name1, siz
 
 class entity_ptr : private uuid {
 public:
+    static entity_store *global_store;
+    
     entity_ptr( const uuid &id ) : uuid(id) {
         
     }
@@ -263,24 +247,6 @@ private:
 
 
 
-
-///////////////////////////////////////////////////////
-// member interaction stuff
-///////////////////////////////////////////////////////
-
-
-void member_interaction( member_type1 &m1, member_type2 &m2 );
-void member_interaction( member_type1 &m1, member_type1 &m2 );
-void member_interaction( member_type1 &m1, member_type3 &m2 );
-
-
-template<size_t Name1, size_t Name2>
-void member_interaction( const entity &e1, const entity &e2 ) {
-    auto m1 = e1.member<Name1>();
-    auto m2 = e2.member<Name2>();
-
-    member_interaction( m1, m2 );
-}
 
 
 void dispatch_interaction( const entity &e1, const entity &e2, size_t name1, size_t name2 );
