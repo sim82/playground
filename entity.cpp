@@ -11,7 +11,7 @@
 // #include "entity_member3.h"
 
 entity_store *entity_ptr::global_store = nullptr;
-
+#if ENTITY_PTR_SHARED
 std::shared_ptr<entity> entity_ptr::lock() {
     auto sp = wp_.lock();
     
@@ -29,6 +29,16 @@ std::shared_ptr<entity> entity_ptr::lock() {
     
     return sp;
 }
+#else
+
+entity* entity_ptr::lock() {
+    if( ep_ == nullptr ) {
+        ep_ = global_store->get(*this).get();
+    }
+    
+    return ep_;
+}
+#endif
 
 //typedef boost::uuids::random_generator uuid_generator;
 
@@ -145,7 +155,10 @@ void entity::add_member_unchecked(size_t name, std::unique_ptr< emember > m) {
         members_valid_ = true;
     }
 #endif
+    m->set_entity( this );
     bool b = member_map_.set( name, std::move(m) );
+    
+    
     assert( b );
     
 
@@ -193,7 +206,7 @@ void entity::run_interactions() {
 entity::~entity() {
 //     print_info();
     
-    std::cerr << "~entity\n";
+//     std::cerr << "~entity\n";
 }
 
 void entity::print_info() {
