@@ -1,5 +1,7 @@
 SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -std=c++0x")
-LINK_DIRECTORIES( /usr/lib/llvm )
+LINK_DIRECTORIES( /usr/lib64/llvm )
+
+include_directories( axe/include )
 
 # add_executable( object_hog object_hog.cpp )
 # target_link_libraries( object_hog ivymike )
@@ -12,7 +14,7 @@ add_executable( bitset bitset.cpp )
 #add_executable( synth synth.cpp )
 #add_executable( watch_tune watch_tune.cpp )
 add_executable( reverse_bits reverse_bits.cpp )
-
+add_executable( axe_parser axe_parser.cpp )
 
 
 add_executable( pool pool.cpp )
@@ -29,7 +31,7 @@ add_executable( bit_fiddle bit_fiddle.cpp )
 
 add_executable( framebuffer framebuffer.cpp )
 add_executable( emator emator.cpp )
-#add_executable( llvm_plf llvm_plf.cpp )
+add_executable( llvm_plf llvm_plf.cpp )
 
 
 #target_link_libraries(future pthread)
@@ -50,4 +52,4 @@ target_link_libraries(pool2 pthread)
 target_link_libraries(framebuffer X11 )
 
 
-#target_link_libraries( llvm_plf pthread ffi dl m LLVMInterpreter LLVMX86Disassembler LLVMX86AsmParser LLVMX86CodeGen LLVMSelectionDAG LLVMAsmPrinter LLVMMCParser LLVMX86Desc LLVMX86Info LLVMX86AsmPrinter LLVMX86Utils LLVMJIT LLVMRuntimeDyld LLVMExecutionEngine LLVMCodeGen LLVMScalarOpts LLVMInstCombine LLVMTransformUtils LLVMipa LLVMAnalysis LLVMTarget LLVMMC LLVMObject LLVMCore LLVMSupport)
+target_link_libraries( llvm_plf pthread ffi dl m LLVMInterpreter LLVMX86Disassembler LLVMX86AsmParser LLVMX86CodeGen LLVMSelectionDAG LLVMAsmPrinter LLVMMCParser LLVMX86Desc LLVMX86Info LLVMX86AsmPrinter LLVMX86Utils LLVMJIT LLVMRuntimeDyld LLVMExecutionEngine LLVMCodeGen LLVMScalarOpts LLVMInstCombine LLVMTransformUtils LLVMipa LLVMAnalysis LLVMTarget LLVMMC LLVMObject LLVMCore LLVMSupport)
