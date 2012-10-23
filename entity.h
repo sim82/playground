@@ -14,7 +14,8 @@
 #include <unordered_map>
 #include "id_map.h"
 
-
+#define ENTITY_DYNAMIC_CAST 0
+#define ENTITY_PTR_SHARED 0
 
 using boost::uuids::uuid;
 
@@ -63,7 +64,19 @@ struct member_traits2<T>                              \
 
 class emember {
 public:
+    emember() : entity_(nullptr) {
+        
+    }
+    
+    void set_entity( entity *ent ) {
+        entity_ = ent;
+    }
+    
     virtual ~emember();
+    
+    
+protected:
+    entity *entity_;
 };
 
 std::unique_ptr<emember> member_factory( size_t name );
@@ -80,14 +93,25 @@ class entity_ptr : private uuid {
 public:
     static entity_store *global_store;
     
-    entity_ptr( const uuid &id ) : uuid(id) {
+    entity_ptr( const uuid &id ) : uuid(id)
+#if !ENTITY_PTR_SHARED
+    ,ep_(nullptr) 
+#endif
+    {
         
     }
-    
+#if ENTITY_PTR_SHARED
     std::shared_ptr<entity>lock();
-    
+#else
+    entity *lock() ;
+#endif
 private:
+#if ENTITY_PTR_SHARED
     std::weak_ptr<entity> wp_;
+#else
+    entity *ep_;
+#endif
+    
 };
 
 
@@ -145,7 +169,7 @@ public:
     typename member_traits<name>::member_type &member() const {
         emember &m = member_unchecked( member_traits<name>::value );
         
-        
+#if ENTITY_DYNAMIC_CAST
         // doing the dynamic cast + error check here is just a precaution in case someone messes up the entity with 
         // an unchecked add. Ideally, a static cast is enough, because the members as statically checked
         // upon insertion.
@@ -156,11 +180,16 @@ public:
             throw std::runtime_error( "dynamic_cast failed during statically checked member access. member map is messed up..." );
         }
         return *p;
-        //         return std::static_pointer_cast<typename member_traits<name>::member_type>( member_unchecked( member_traits<name>::value ));
+#else 
+        return *static_cast<typename member_traits<name>::member_type *>(&m);
+#endif
+        //   return std::static_pointer_cast<typename member_traits<name>::member_type>( member_unchecked( member_traits<name>::value ));
     }
 
     template<size_t name>
     typename member_traits<name>::member_type &member() {
+        
+#if ENTITY_DYNAMIC_CAST
         // dynamic_cast: d.t.o.
         
         auto p = dynamic_cast<typename member_traits<name>::member_type *>( &member_unchecked( member_traits<name>::value ));
@@ -170,6 +199,9 @@ public:
         }
 //         assert( p != nullptr );
         return *p;
+#else   
+        return *static_cast<typename member_traits<name>::member_type *>(&member_unchecked( member_traits<name>::value ));
+#endif
 //         return std::static_pointer_cast<typename member_traits<name>::member_type>( member_unchecked( member_traits<name>::value ));
     }
 
@@ -177,6 +209,7 @@ public:
     template<typename MType>
     MType &member() {
          size_t name = member_traits2<MType>::value;
+#if ENTITY_DYNAMIC_CAST
          auto p = dynamic_cast<MType *>( &member_unchecked( name ));
         
          if( p == nullptr ) {
@@ -184,6 +217,9 @@ public:
          }
 //         assert( p != nullptr );
         return *p;
+#else
+        return *static_cast<MType *>( &member_unchecked( name ));
+#endif
     }
 
     template<size_t name>
@@ -205,6 +241,11 @@ public:
     template<typename MType,typename... Args>
     void make_member(Args&&... args) {
         return add_member<member_traits2<MType>::value>(make_unique<MType>(std::forward<Args>(args)...));
+    }
+    
+    template<typename MBase,typename MType,typename... Args>
+    void make_member(Args&&... args) {
+        return add_member<member_traits2<MBase>::value>(make_unique<MType>(std::forward<Args>(args)...));
     }
     
     // interaction management stuff
@@ -230,8 +271,9 @@ private:
     
 //     std::vector<ipair> members_;
 //     bool members_valid_;
-    
-    id_map_dynamic<emember_ptr> member_map_;
+//     id_map_vanilla<emember_ptr,7> member_map_;
+//     id_map_dynamic<emember_ptr> member_map_;
+    id_map_fixed<emember_ptr,5> member_map_;
     
     struct interaction {
         interaction( size_t name1, size_t name2, std::shared_ptr<entity> entity2 ) : name1_(name1), name2_(name2), entity2_(entity2->id()) {}

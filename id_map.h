@@ -23,13 +23,18 @@ public:
     }
     
     typedef typename std::array<Value, max_num>::iterator iterator;
+    typedef typename std::array<Value, max_num>::const_iterator const_iterator;
     
     
     inline iterator end() {
         return values_.end();
     }
-    
-    inline bool set( size_t id, Value v ) {
+    inline const_iterator end() const {
+        return values_.end();
+    }
+  
+    template<typename... Args>
+    inline bool emplace( size_t id, Args&&... args) {
         
         bitfield_t mask = id_mask(id);
         
@@ -37,7 +42,7 @@ public:
         
         if( (bits_ & mask) != 0 ) {
 //             std::cout << "replace\n";
-            values_[idx] = v;
+            values_[idx] = Value(std::forward<Args>(args)...);
         } else {
             size_t count = popcount( bits_ );
             
@@ -50,13 +55,35 @@ public:
             auto end = values_.begin() + count;
            // values_.insert(it, v);
 //             std::cout << "set: " << count << "\n";
-            std::copy_backward( it, end, end+1 );
-            values_[idx] = v;
+            std::move_backward( it, end, end+1 );
+            
+            values_[idx] = Value(std::forward<Args>(args)...);
         }
         
         return true;
 //          std::cout << "bits: " << id << " " << mask << "\n";
     }
+    
+    // CHECK: did I understand this correctly: implementing const & and && setter in terms of emplace is 'the right thing' in c++11?
+//     inline bool set( size_t id, Value &&v ) {
+//         return emplace( id, std::move(v));
+//     }
+    
+    
+    
+//     inline bool set( size_t id, const Value &v ) {
+//         std::cout << "copy set\n";
+//         return emplace( id, v );
+//     }
+
+// CHECK2: can this thing really replace all setters?
+    template<typename T1>
+    inline bool set( size_t id, T1 &&v ) {
+//         std::cout << "forward\n";
+        return emplace( id, std::forward<T1>(v));
+    }
+    
+    
     
     inline void remove( size_t id ) {
         bitfield_t mask = id_mask(id);
@@ -89,21 +116,37 @@ public:
         
         return values_.begin() + idx;
     }
+    inline const_iterator find( size_t id ) const {
+        bitfield_t mask = id_mask(id);
+        
+        if( (bits_ & mask) == 0 ) {
+            //throw std::runtime_error( "bad id" );
+            
+            return values_.end();
+        } 
+        
+        size_t idx = index(id);
+        
+//         std::cout << "find: " << id << " " << idx << "\n";
+        
+        return values_.begin() + idx;
+    }
+    
     inline static size_t max_id() {
         return sizeof(bitfield_t) * 8 - 1;
     }
 private:
-    inline size_t popcount( uint32_t f ) {
+    inline size_t popcount( uint32_t f ) const {
         return __builtin_popcount(f);
     }
-    inline size_t popcount( uint64_t f ) {
+    inline size_t popcount( uint64_t f ) const {
         return __builtin_popcountll(f);
     }
-    inline uint64_t id_mask( size_t id ) {
+    inline uint64_t id_mask( size_t id ) const {
         return bitfield_t(1) << (id + 1);
     }
     
-    inline size_t index( size_t id ) {
+    inline size_t index( size_t id ) const {
         uint64_t mask = bitfield_t(-1) >> (num_bits_ - id - 1);
         
 //         std::cout << "mask: " << mask << " " << id << "\n";
@@ -264,18 +307,29 @@ template<typename Value,size_t num_slots>
 class id_map_vanilla {
 public:
     typedef typename std::array<Value,num_slots>::iterator iterator;
+    typedef typename std::array<Value,num_slots>::const_iterator const_iterator;
     
     id_map_vanilla() {
         std::fill( used_.begin(), used_.end(), false );
         
     } 
-    
-    inline bool set( size_t id, Value v ) {
+    template<typename... Args>
+    inline bool emplace( size_t id, Args&&... args) {
         used_[id] = true;
-        slots_[id] = v;
+        slots_[id] = Value(std::forward<Args>(args)...);
         
         return true;
+//          std::cout << "bits: " << id << " " << mask << "\n";
     }
+    
+
+// CHECK2: can this thing really replace all setters?
+    template<typename T1>
+    inline bool set( size_t id, T1 &&v ) {
+//         std::cout << "forward\n";
+        return emplace( id, std::forward<T1>(v));
+    }
+    
     
     
     inline iterator find( size_t id ) {
@@ -285,6 +339,14 @@ public:
             return slots_.begin() + id;
         }
     }
+    inline const_iterator find( size_t id ) const {
+        if( !used_[id] ) {
+            return slots_.end();
+        } else {
+            return slots_.begin() + id;
+        }
+    }
+    
     inline size_t max_id() const {
         return used_.size() - 1;
     }
@@ -292,6 +354,10 @@ public:
     inline iterator end() {
         return slots_.end();
     }
+    inline const_iterator end() const {
+        return slots_.end();
+    }
+    
 private:
     std::array<uint8_t,num_slots> used_;
     std::array<Value,num_slots> slots_;

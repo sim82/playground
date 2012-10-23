@@ -1,4 +1,4 @@
-#if 0
+#if 1
 #include <cassert>
 
 #include <stdexcept>
@@ -119,10 +119,10 @@ public:
         
 //         shminfo.
         
-        XImage *xi = XShmCreateImage(display_, DefaultVisual( display_, 0 ), DefaultDepthOfScreen(screen),
+     /*   XImage *xi = XShmCreateImage(display_, DefaultVisual( display_, 0 ), DefaultDepthOfScreen(screen),
                           ZPixmap, NULL, &shminfo,
                           width_, height_);
-        
+     */   
      
         
     }
@@ -167,7 +167,7 @@ private:
 
 int main( int argc, char *argv[] ) {
     
-    shm_obj t( 1024 * 1024 );
+  //  shm_obj t( 1024 * 1024 );
     
     framebuffer fb;
     
@@ -180,9 +180,11 @@ int main( int argc, char *argv[] ) {
     
     
     
-    //while( true ) {
+    while( true ) {
         fb.draw_point( rand() % fb.width(), rand() % fb.height() );
-    //}
+        fb.flush();
+        getchar();
+    }
     
     
     
