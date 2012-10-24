@@ -32,7 +32,7 @@ add_executable( bit_fiddle bit_fiddle.cpp )
 add_executable( framebuffer framebuffer.cpp )
 add_executable( emator emator.cpp )
 add_executable( llvm_plf llvm_plf.cpp )
-add_executable( game1 game1.cpp entity.cpp game1_entity.cpp )
+# add_executable( game1 game1.cpp entity.cpp game1_entity.cpp )
 #add_executable( llvm_plf llvm_plf.cpp )
 
 
@@ -44,7 +44,7 @@ add_executable( fixed fixed.cpp )
 #target_link_libraries(synth jack)
 
 add_executable( id_map id_map.cpp )
-add_executable( game1 game1.cpp )
+# add_executable( game1 game1.cpp )
 #target_link_libraries( named_pipe pthread )
 #target_link_libraries( opencl OpenCL )
 target_link_libraries(pool pthread)
@@ -52,6 +52,8 @@ add_executable( compact_vector compact_vector.cpp )
 
 target_link_libraries(pool2 pthread)
 target_link_libraries(framebuffer X11 )
-target_link_libraries(game1 X11)
+# target_link_libraries(game1 X11)
 
-target_link_libraries( llvm_plf pthread ffi dl m LLVMInterpreter LLVMX86Disassembler LLVMX86AsmParser LLVMX86CodeGen LLVMSelectionDAG LLVMAsmPrinter LLVMMCParser LLVMX86Desc LLVMX86Info LLVMX86AsmPrinter LLVMX86Utils LLVMJIT LLVMRuntimeDyld LLVMExecutionEngine LLVMCodeGen LLVMScalarOpts LLVMInstCombine LLVMTransformUtils LLVMipa LLVMAnalysis LLVMTarget LLVMMC LLVMObject LLVMCore LLVMSupport)
+target_link_libraries( llvm_plf pthread ffi dl m LLVM-3.0)
+
+# target_link_libraries( llvm_plf pthread ffi dl m LLVMInterpreter LLVMX86Disassembler LLVMX86AsmParser LLVMX86CodeGen LLVMSelectionDAG LLVMAsmPrinter LLVMMCParser LLVMX86Desc LLVMX86Info LLVMX86AsmPrinter LLVMX86Utils LLVMJIT LLVMRuntimeDyld LLVMExecutionEngine LLVMCodeGen LLVMScalarOpts LLVMInstCombine LLVMTransformUtils LLVMipa LLVMAnalysis LLVMTarget LLVMMC LLVMObject LLVMCore LLVMSupport)
