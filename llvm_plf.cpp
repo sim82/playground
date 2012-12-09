@@ -58,13 +58,13 @@ int main(int argc, char**argv) {
     std::string error_string;
     EngineBuilder builder(mod);
     
-//     llvm::TargetOptions opt;
-//     opt.PrintMachineCode = true;
+    llvm::TargetOptions opt;
+    opt.PrintMachineCode = true;
     
 //     
     
-    //builder.setTargetOptions(opt);
-    llvm::PrintMachineCode = !true;
+    builder.setTargetOptions(opt);
+   // llvm::PrintMachineCode = !true;
     
     ee = builder.setErrorStr(&error_string).setEngineKind(llvm::EngineKind::JIT).create();
     
@@ -162,6 +162,9 @@ Module* makeLLVMModule() {
         loop_test->setCallingConv(llvm::CallingConv::C);
         Function::arg_iterator args = loop_test->arg_begin();
         Value *a = args++;
+
+        a = llvm::ConstantInt::get( gctx, llvm::APInt(32, 5) );
+        
         a->setName("a");
 
 //         loop_test->
@@ -187,7 +190,7 @@ Module* makeLLVMModule() {
         PHINode *v_b = builder.CreatePHI(llvm::Type::getInt32Ty(gctx), 2 );
         v_b->addIncoming(b, bl_outer);
         
-        Value *a_next = builder.CreateBinOp(Instruction::Add, variable, llvm::ConstantInt::get( gctx, llvm::APInt(32, 1) ));        
+        Value *a_next = builder.CreateBinOp(Instruction::Sub, variable, llvm::ConstantInt::get( gctx, llvm::APInt(32, 1) ));        
         Value *b_next = builder.CreateBinOp(Instruction::Add, v_b, llvm::ConstantInt::get( gctx, llvm::APInt(32, 1) ));        
         
         Value *c_ret = builder.CreateICmpEQ( a_next, llvm::ConstantInt::get( gctx, llvm::APInt(32, 0) ));
