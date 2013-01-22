@@ -6,6 +6,8 @@
 #define __STDC_CONSTANT_MACROS
 #include <iostream>
 #include <memory>
+#include <sstream>
+#include <deque>
 #include <llvm/Module.h>
 #include <llvm/Function.h>
 #include <llvm/PassManager.h>
@@ -19,6 +21,8 @@
 #include <llvm/ExecutionEngine/JIT.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Target/TargetOptions.h>
+
+
 
 
 
@@ -40,6 +44,8 @@ using llvm::PHINode;
 Module* makeLLVMModule();
 
 int main(int argc, char**argv) {
+    
+ 
     llvm::InitializeNativeTarget();
     
     Module * mod = makeLLVMModule();
@@ -64,7 +70,7 @@ int main(int argc, char**argv) {
 //     
     
     //builder.setTargetOptions(opt);
-    llvm::PrintMachineCode = !true;
+    llvm::PrintMachineCode = true;
     
     ee = builder.setErrorStr(&error_string).setEngineKind(llvm::EngineKind::JIT).create();
     
@@ -111,6 +117,26 @@ int main(int argc, char**argv) {
     return 0;
 }
 
+
+BasicBlock *fixedLoop( int n, BasicBlock *body, PHINode *loop_variable, Function *func ) {
+    auto &gctx = llvm::getGlobalContext();
+    
+    BasicBlock* loop_head = BasicBlock::Create(llvm::getGlobalContext(), "loop_head", func);
+    IRBuilder<> builder(loop_head);
+    Value *a = llvm::ConstantInt::get( gctx, llvm::APInt(32, 0) );
+    
+    builder.CreateBr(body);
+    loop_variable->addIncoming(a, loop_head);
+    
+    builder.SetInsertPoint(body);
+    Value *a_next = builder.CreateBinOp(Instruction::Sub, loop_variable, llvm::ConstantInt::get( gctx, llvm::APInt(32, 1) ));
+    
+    
+    Value *c_ret = builder.CreateICmpEQ( a_next, llvm::ConstantInt::get( gctx, llvm::APInt(32, 0) ));
+        
+    loop_variable->addIncoming(a_next, body);
+    
+}
 
 Module* makeLLVMModule() {
     // Module Construction
@@ -161,7 +187,9 @@ Module* makeLLVMModule() {
         Function *loop_test = llvm::cast<Function>(c);
         loop_test->setCallingConv(llvm::CallingConv::C);
         Function::arg_iterator args = loop_test->arg_begin();
-        Value *a = args++;
+        //Value *a = args++;
+        
+        Value *a = llvm::ConstantInt::get( gctx, llvm::APInt(32, 1000) );
         a->setName("a");
 
 //         loop_test->
@@ -187,7 +215,7 @@ Module* makeLLVMModule() {
         PHINode *v_b = builder.CreatePHI(llvm::Type::getInt32Ty(gctx), 2 );
         v_b->addIncoming(b, bl_outer);
         
-        Value *a_next = builder.CreateBinOp(Instruction::Add, variable, llvm::ConstantInt::get( gctx, llvm::APInt(32, 1) ));        
+        Value *a_next = builder.CreateBinOp(Instruction::Sub, variable, llvm::ConstantInt::get( gctx, llvm::APInt(32, 1) ));        
         Value *b_next = builder.CreateBinOp(Instruction::Add, v_b, llvm::ConstantInt::get( gctx, llvm::APInt(32, 1) ));        
         
         Value *c_ret = builder.CreateICmpEQ( a_next, llvm::ConstantInt::get( gctx, llvm::APInt(32, 0) ));
