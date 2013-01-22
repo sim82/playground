@@ -64,13 +64,13 @@ int main(int argc, char**argv) {
     std::string error_string;
     EngineBuilder builder(mod);
     
-//     llvm::TargetOptions opt;
-//     opt.PrintMachineCode = true;
+    llvm::TargetOptions opt;
+    opt.PrintMachineCode = true;
     
 //     
     
-    //builder.setTargetOptions(opt);
-    llvm::PrintMachineCode = true;
+    builder.setTargetOptions(opt);
+   // llvm::PrintMachineCode = !true;
     
     ee = builder.setErrorStr(&error_string).setEngineKind(llvm::EngineKind::JIT).create();
     
@@ -190,6 +190,7 @@ Module* makeLLVMModule() {
         //Value *a = args++;
         
         Value *a = llvm::ConstantInt::get( gctx, llvm::APInt(32, 1000) );
+        
         a->setName("a");
 
 //         loop_test->
