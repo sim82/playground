@@ -5,6 +5,8 @@ SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -std=c++0x")
 LINK_DIRECTORIES( /usr/lib/llvm )
 
 include_directories( axe/include )
+include_directories( /space/src/boost_1_52_0 )
+link_directories( /space/src/boost_1_52_0/stage/lib )
 
 # add_executable( object_hog object_hog.cpp )
 # target_link_libraries( object_hog ivymike )
@@ -36,7 +38,7 @@ add_executable( bit_fiddle bit_fiddle.cpp )
 
 add_executable( framebuffer framebuffer.cpp )
 add_executable( emator emator.cpp )
-add_executable( llvm_plf llvm_plf.cpp )
+# add_executable( llvm_plf llvm_plf.cpp )
 
 # add_executable( game1 game1.cpp entity.cpp game1_entity.cpp )
 #add_executable( llvm_plf llvm_plf.cpp )
@@ -51,6 +53,8 @@ add_executable( fixed fixed.cpp )
 
 add_executable( id_map id_map.cpp )
 add_executable( boost_async boost_async.cpp )
+add_executable( disk_hash disk_hash.cpp )
+
 
 # add_executable( game1 game1.cpp )
 #target_link_libraries( named_pipe pthread )
@@ -62,7 +66,7 @@ target_link_libraries(pool2 pthread)
 target_link_libraries(framebuffer X11 )
 # target_link_libraries(game1 X11)
 
-target_link_libraries( llvm_plf pthread ffi dl m LLVM-3.1)
+# target_link_libraries( llvm_plf pthread ffi dl m LLVM-3.1)
 
-target_link_libraries( boost_async boost_thread )
+target_link_libraries( boost_async boost_thread boost_system )
 # target_link_libraries( llvm_plf pthread ffi dl m LLVMInterpreter LLVMX86Disassembler LLVMX86AsmParser LLVMX86CodeGen LLVMSelectionDAG LLVMAsmPrinter LLVMMCParser LLVMX86Desc LLVMX86Info LLVMX86AsmPrinter LLVMX86Utils LLVMJIT LLVMRuntimeDyld LLVMExecutionEngine LLVMCodeGen LLVMScalarOpts LLVMInstCombine LLVMTransformUtils LLVMipa LLVMAnalysis LLVMTarget LLVMMC LLVMObject LLVMCore LLVMSupport)
