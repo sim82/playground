@@ -25,6 +25,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <iterator>
 
 class mapped_file {
 public:
@@ -164,8 +165,13 @@ public:
         
     }
     
-    void add( const char *filename ) {
-        size_t size = file_size( filename );
+    bool add( const char *filename ) {
+        std::streampos size = file_size( filename );
+
+        if( size > 0xffffffff ) { // WTF? tellg should return -1, instead it returns '-1 with sign bit set to zero...'
+            std::cout << "ignore " << filename << "\n";
+            return false;
+        }
         
         size_t name_hash = hash_value( filename );
         size_t bucket = name_hash % table_size_;
@@ -184,6 +190,8 @@ public:
         file_pos = align( file_pos );
 //         std::cout << "file pos: " << file_pos << "\n";
         append_pos_ = file_pos + size;
+        
+        return true;
     }
     
     template<typename T>
@@ -194,12 +202,13 @@ public:
     }
 private:
     
-    size_t file_size( const char *filename ) {
+    std::streampos file_size( const char *filename ) {
         std::ifstream is( filename );
             
         assert( is.good() );
             
         is.seekg( 0, std::ios_base::end );
+        
         return is.tellg();
     }
     
@@ -272,8 +281,10 @@ private:
 
 
 int main() {
-    const size_t ht_size = 1024 * 32;
+        
+    //const size_t ht_size = 1024 * 32;
     
+    const size_t ht_size = 1024;
     if( !false )
     {
         hash_builder hb( ht_size );
