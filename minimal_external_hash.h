@@ -31,7 +31,10 @@
 namespace meh {
 class mapped_file {
 public:
-    mapped_file( const char *filename, bool read_write ) {
+    mapped_file( const char *filename, bool read_write )
+      : base_(0),
+      read_write_(read_write)
+    {
         int mode = O_RDONLY;
         int prot = PROT_READ;
         if( read_write ) {
@@ -45,18 +48,37 @@ public:
         size_ = lseek( fd_, 0, SEEK_END );
         lseek( fd_, 0, SEEK_SET );
         
-        base_ = mmap( 0, size_, prot, MAP_SHARED, fd_, 0 );
-        assert( base_ != 0 );
+        map();
         
-        if( read_write ) {
-            madvise( base_, size_, MADV_SEQUENTIAL );
-        }
     }
     size_t size() const {
         return size_;
     }
-    ~mapped_file() {
+    
+    void unmap() {
+        assert( base_ != 0 );
         munmap( base_, size_ );
+        base_ = 0;
+    }
+    void map() {
+        assert( base_ == 0 );
+        int prot = PROT_READ;
+        if( read_write_ ) {
+            prot = PROT_READ | PROT_WRITE;
+        }
+        
+        base_ = mmap( 0, size_, prot, MAP_SHARED, fd_, 0 );
+        assert( base_ != 0 );
+        
+        if( read_write_ ) {
+            madvise( base_, size_, MADV_SEQUENTIAL );
+        }
+    }
+    
+    ~mapped_file() {
+        if( base_ != 0 ) {
+            unmap();
+        }
         close( fd_ );
     }
     
@@ -70,6 +92,7 @@ private:
 //     bool read_write_;
     int fd_;
     off_t size_;
+    bool read_write_;
 };
     
     
@@ -248,23 +271,26 @@ public:
     const static size_t int_size = sizeof(int_type);
     
     hash( const char *filename ) : mf_(filename, false) {
-        base_ = (char *)mf_.base();
+        char *base = (char *)mf_.base();
         size_t s = mf_.size();
         
         assert( s > int_size);
-        int_type ts = get_int( base_ + s - int_size );
+        int_type ts = get_int( base + s - int_size );
         
         std::cout << "table size: " << ts << "\n";
         table_size_ = ts;
-        assert( base_ == align(base_));
+        assert( base == align(base));
     }
     
     char *find( const char *filename, size_t &out_size ) {
+        char *base = (char *)mf_.base();
+        assert( base == align(base));
+        
         size_t name_hash = hash_value( filename );
         size_t bucket = name_hash % table_size_;
         
         // start offset of hash chain
-        size_t offset = get_int( base_ + bucket * int_size );
+        size_t offset = get_int( base + bucket * int_size );
         
         size_t chain_len = 0;
         
@@ -272,13 +298,13 @@ public:
         while( offset != 0 ) {
             validate_offset( offset );
             
-            const size_t next_offset = get_int( base_ + offset );
+            const size_t next_offset = get_int( base + offset );
             offset += int_size;
 
-            if( strncmp( filename, base_ + offset, remaining_size( offset ) ) == 0 ) {
+            if( strncmp( filename, base + offset, remaining_size( offset ) ) == 0 ) {
                 offset += strlen( filename ) + 1;
                 
-                size_t size = get_int( base_ + offset );
+                size_t size = get_int( base + offset );
                 offset += int_size;
                 offset = align(offset);
 //                 std::cout << "found: " << filename << " chunk size: " << size << " at " << std::hex << offset << std::dec << " chain: " << chain_len << "\n";
@@ -286,7 +312,7 @@ public:
                     throw std::runtime_error( "internal error. premature end of hash file." );
                 }
                 out_size = size;
-                return base_ + offset;
+                return base + offset;
             }
             ++chain_len;
             offset = next_offset;
@@ -297,7 +323,9 @@ public:
         return 0;
     }
     
-    
+    mapped_file& mf() {
+        return mf_;
+    }
 private:
     void validate_offset( size_t ofs ) {
         if( ofs > mf_.size() - int_size ) {
@@ -322,7 +350,7 @@ private:
     
     size_t table_size_;
     mapped_file mf_;
-    char *base_;
+    
 };
 
 

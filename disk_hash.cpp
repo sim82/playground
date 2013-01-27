@@ -357,8 +357,10 @@ int main() {
     }
     
     size_t nfound = 0;
+    meh::hash dh( "hash.bin" );
+    while(true)
     {
-        meh::hash dh( "hash.bin" );
+        
         std::ifstream is( "files.txt" );
         
         while( is.good() ) {
@@ -377,10 +379,17 @@ int main() {
             }
         }
         
+        std::cout << "found: " << nfound << "\n";
+        dh.mf().unmap();
+        getchar();
+        dh.mf().map();
+    
     }
     
-    std::cout << "found: " << nfound << "\n";
-     
+    
+    
+    
+    
     
 //     mapped_file mf( "test.bin", false );
     
