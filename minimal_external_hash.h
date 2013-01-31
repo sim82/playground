@@ -347,10 +347,8 @@ private:
         return x;
     }
     
-    
     size_t table_size_;
     mapped_file mf_;
-    
 };
 
 

@@ -329,7 +329,7 @@ int main() {
     //const size_t ht_size = 1024 * 32;
     
     const size_t ht_size = 1024 * 64;
-    if( false )
+    if( !false )
     {
         meh::file_based_builder hb( ht_size );
     

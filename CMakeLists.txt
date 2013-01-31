@@ -6,8 +6,9 @@ LINK_DIRECTORIES( /usr/lib/llvm )
 
 include_directories( axe/include )
 include_directories( /space/src/boost_1_52_0 )
+add_executable( test test.cpp )
+# add_executable( game game.cpp )
 link_directories( /space/src/boost_1_52_0/stage/lib )
-
 # add_executable( object_hog object_hog.cpp )
 # target_link_libraries( object_hog ivymike )
 
@@ -33,7 +34,7 @@ add_executable( entity_nonshared entity_nonshared.cpp )
 #add_executable( opencl opencl.cpp )
 add_executable( red_code red_code.cpp )
 add_executable( c_compiler c_compiler.cpp )
-add_executable( bit_fiddle bit_fiddle.cpp )
+#add_executable( bit_fiddle bit_fiddle.cpp )
 #add_executable( rand rand.cpp )
 
 add_executable( framebuffer framebuffer.cpp )

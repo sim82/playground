@@ -1,3 +1,5 @@
+
+#if 1
 #include <iostream>
 #include <vector>
 #include <string>
@@ -20,24 +22,32 @@ int call( func_t f ) {
 	return f(2);
 }
 
+
+typedef uint64_t mword_t;
+
 template<typename iiter>
-int64_t mycall( iiter first, iiter last, void *addr ) {
-	int64_t x = 2;
+mword_t mycall( iiter first, iiter last, void *addr ) {
 
-	int64_t iaddr = int64_t(addr) + 0x0;
+	size_t esp;
+	size_t esp2;
 
-	int64_t y;
+	asm( "mov %%esp,%0" : "=r"(esp) : :);
+	mword_t x = 2;
+
+	mword_t iaddr = mword_t(addr) + 0x0;
+
+	mword_t y;
 
 
 	assert( std::distance(first, last) == 3);
 
 	iiter it = first;
 
-	int64_t a = *it++;
-	int64_t b = *it++;
-	int64_t c = *it++;
+	mword_t a = *it++;
+	mword_t b = *it++;
+	mword_t c = *it++;
 
-
+#if 0
 	asm ("movq %0, %%rax;"
 		 "push %%rax;"
 		 "movq %1, %%rax;"
@@ -63,10 +73,47 @@ int64_t mycall( iiter first, iiter last, void *addr ) {
 				: : : "%rax"
 				);
 	}
+#else
+	asm ("mov %0, %%eax;"
+		 "push %%eax;"
+		 "mov %1, %%eax;"
+		 "push %%eax;"
+		 "mov %2, %%eax;"
+		 "push %%eax;"
 
+			:
+			: "r"(a), "r"(b), "r"(c)
+			: "%eax"
+	);
+	asm(
+		 "mov %1, %%eax;"
+		 "call *%%eax;"
+		 "mov %%eax, %0;"
+				: "=r"(y)
+				:"r"(iaddr)        /* output */
+				:"%eax"        /* clobbered register */
+	);
+
+
+	mword_t sf = std::distance(first, last) * sizeof(mword_t);
+	asm( "sub %0,%%esp"
+			:
+			: "r"(sf)
+			:
+			  );
+	asm( "mov %%esp,%0" : "=r"(esp2) : :);
+
+	std::cout << esp << " " << esp2 << "\n";
+//	while( first++ != last ) {
+//		asm( "pop %%eax;"
+//				: : : "%eax"
+//				);
+//	}
+#endif
 	return y;
 
 }
+
 
 template<typename T1, typename T2>
 std::pair<T1,T2> kv(T1 &&v1, T2 &&v2) {
@@ -361,9 +408,35 @@ int main2() {
 	return 0;
 }
 
+class bla {
+
+public:
+	bla() {
+		std::cout << "default const\n";
+	}
+	bla( const bla &x  ) {
+		std::cout << "const\n";
+	}
+
+	bla( std::vector<char> && x ) {
+		std::cout << "rvalue const: " << x.size() << "\n";
+	}
+
+	const bla &operator=(bla && x ) {
+		std::cout << "rvalue assign\n";
+
+		return *this;
+
+	}
+private:
+
+};
+
 int main() {
 
-	posix_file fd( "test2.bin", O_RDONLY );
+
+
+	posix_file fd( "test2_32.bin", O_RDONLY );
 
 	//int fd = open( "test2.bin", O_RDONLY );
 
@@ -379,12 +452,12 @@ int main() {
 
 	assert( base != 0 );
 
-	std::cout << "base: " << base << "\n";
+	std::cout << "base: " << mword_t(base) << "\n";
 
 
-	std::array<int64_t,3> par = {1,2,3};
+	std::vector<mword_t> par = {1,2,3};
 
-	int64_t r = mycall( par.begin(), par.end(), base );
+	mword_t r = mycall( par.begin(), par.end(), base );
 	std::cerr << r << "\n";
 
 //#if 1
@@ -418,5 +491,13 @@ int main() {
 //
 //#endif
 
+
+
 	return 0;
 }
+#else
+
+int main() {
+
+}
+#endif
