@@ -6,7 +6,7 @@ LINK_DIRECTORIES( /usr/lib/llvm )
 
 include_directories( axe/include )
 include_directories( /space/src/boost_1_52_0 )
-add_executable( test test.cpp )
+#add_executable( test test.cpp )
 # add_executable( game game.cpp )
 link_directories( /space/src/boost_1_52_0/stage/lib )
 # add_executable( object_hog object_hog.cpp )
@@ -39,6 +39,7 @@ add_executable( c_compiler c_compiler.cpp )
 
 add_executable( framebuffer framebuffer.cpp )
 add_executable( emator emator.cpp )
+add_executable( rel_ptr rel_ptr.cpp )
 # add_executable( llvm_plf llvm_plf.cpp )
 
 # add_executable( game1 game1.cpp entity.cpp game1_entity.cpp )
