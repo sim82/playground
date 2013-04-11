@@ -9,6 +9,7 @@
 #include "cycle.h"
 #include "time.h"
 
+#include "rel_ptr.h"
 
 
 double ivy_mike::perf_timer::my_getticks() {
@@ -19,56 +20,6 @@ double ivy_mike::perf_timer::my_getticks() {
 #endif
 }
 
-template<typename T>
-class rel_ptr {
-public:
-    rel_ptr() : off_(0) {
-        
-    }
-    
-    rel_ptr( const rel_ptr &other ) {
-        reset( other.get() );
-    }
-    
-    rel_ptr operator=( const rel_ptr &other ) {
-        reset( other.get() );
-    }
-    
-    rel_ptr( T *ptr ) {
-        reset( ptr );
-	}
-	
-	
-	void reset( T *ptr ) {
-        size_t dest = size_t(ptr);
-        size_t src = size_t(this);
-        
-        off_ = off_t(dest - src);    
-    }
-	
-	inline T* get() const {
-        if( off_ == 0 ) {
-            throw std::runtime_error( "bad relative ptr" );
-        }
-        
-        size_t src = size_t(this);
-        size_t dest = src + off_;
-        
-        return (T*)(dest);
-	}
-	
-	inline bool valid() const {
-        return off_ != 0;
-    }
-	
-	void test() const {
-        std::cout << "rel ptr: " << this << " + " << off_ << " = " << get() << "\n";
-    }
-	
-private:
-	ssize_t off_;
-	
-};
 
 class test1 {
 public:
@@ -254,6 +205,7 @@ void bench( test1 * const ptr, test1_abs * const ptr_abs ) {
 
 int main() {
     
+#if 0
     std::unique_ptr<test1> ptr_a( new test1 );
     std::cout << "a: " << ptr_a.get() << "\n";
     
@@ -273,16 +225,16 @@ int main() {
     ssize_t off = a - b;
     
     std::cout << off << " " << ((b + off) == a) << "\n";
-	
+#endif
     
 #if 1
     const size_t num = 1024 * 1024 * 512;
     inc_alloc<test1> xalloc(num + 1);
-    inc_alloc<test1> xalloc2(num + 1);
+    inc_alloc<test1_abs> xalloc2(num + 1);
 #else
     const size_t num = 1024 * 1024 * 16;
     rnd_alloc<test1,num * 2> xalloc;
-    rnd_alloc<test1,num * 2> xalloc2;
+    rnd_alloc<test1_abs,num * 2> xalloc2;
 #endif
     test1 * const ptr = new(xalloc.alloc()) test1;
     test1 *xptr = ptr;

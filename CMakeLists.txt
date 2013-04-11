@@ -40,6 +40,7 @@ add_executable( c_compiler c_compiler.cpp )
 add_executable( framebuffer framebuffer.cpp )
 add_executable( emator emator.cpp )
 add_executable( rel_ptr rel_ptr.cpp )
+add_executable( buddy buddy.cpp )
 # add_executable( llvm_plf llvm_plf.cpp )
 
 # add_executable( game1 game1.cpp entity.cpp game1_entity.cpp )
