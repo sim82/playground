@@ -1,4 +1,11 @@
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -std=c++0x")
+# build with clang:
+# CC=clang CXX=clang++ cmake .. -DCMAKE_USER_MAKE_RULES_OVERRIDE=~/src/playground/ClangOverrides.txt -DCMAKE_BUILD_TYPE=Release
+# cmake  -DCMAKE_C_COMPILER=/usr/lib/clang-analyzer/scan-build/ccc-analyzer -DCMAKE_CXX_COMPILER=/usr/lib/clang-analyzer/scan-build/c++-analyzer ..
+# scan-build -o static_analysis_results make
+
+
+
+SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -Wno-mismatched-tags  -std=c++0x")
 
 
 
@@ -41,6 +48,16 @@ add_executable( framebuffer framebuffer.cpp )
 add_executable( emator emator.cpp )
 add_executable( rel_ptr rel_ptr.cpp )
 add_executable( buddy buddy.cpp )
+add_executable( inplace_queue inplace_queue.cpp )
+add_executable( inplace_queue_atomic inplace_queue_atomic.cpp )
+# add_executable( inplace_queue_locked inplace_queue_locked.cpp )
+
+target_link_libraries( inplace_queue_atomic pthread )
+target_link_libraries( inplace_queue_locked pthread )
+
+add_executable( message_passing message_passing.cpp message_passing_main.cpp)
+target_link_libraries( message_passing  pthread )
+
 # add_executable( llvm_plf llvm_plf.cpp )
 
 # add_executable( game1 game1.cpp entity.cpp game1_entity.cpp )
@@ -55,7 +72,7 @@ add_executable( fixed fixed.cpp )
 #target_link_libraries(synth jack)
 
 add_executable( id_map id_map.cpp )
-add_executable( boost_async boost_async.cpp )
+#add_executable( boost_async boost_async.cpp )
 add_executable( disk_hash disk_hash.cpp )
 
 
@@ -71,5 +88,5 @@ target_link_libraries(framebuffer X11 )
 
 # target_link_libraries( llvm_plf pthread ffi dl m LLVM-3.1)
 
-target_link_libraries( boost_async boost_thread boost_system )
+# target_link_libraries( boost_async boost_thread boost_system )
 # target_link_libraries( llvm_plf pthread ffi dl m LLVMInterpreter LLVMX86Disassembler LLVMX86AsmParser LLVMX86CodeGen LLVMSelectionDAG LLVMAsmPrinter LLVMMCParser LLVMX86Desc LLVMX86Info LLVMX86AsmPrinter LLVMX86Utils LLVMJIT LLVMRuntimeDyld LLVMExecutionEngine LLVMCodeGen LLVMScalarOpts LLVMInstCombine LLVMTransformUtils LLVMipa LLVMAnalysis LLVMTarget LLVMMC LLVMObject LLVMCore LLVMSupport)
