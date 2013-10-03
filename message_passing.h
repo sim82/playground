@@ -11,6 +11,7 @@
 #include <functional>
 #include <algorithm>
 
+
 namespace msg {
  
     
@@ -32,6 +33,8 @@ namespace msg {
 
 namespace mp {
 
+const static bool sender_handler_check = false;
+    
 class typeinfo_wrapper {
 public:
     typeinfo_wrapper( const std::type_info &t ) : t_(t) {}
@@ -138,7 +141,18 @@ public:
     template<typename T, typename... Args>
     void emplace( Args...  args ) {
         std::unique_lock<std::mutex> lock( central_mtx_ );
-        q_.emplace_back( typeinfo_wrapper(typeid(T)), make_unique<T>(std::forward<Args>(args)...), TOKEN_NONE, false );
+        
+        
+        auto typeinfo = typeinfo_wrapper(typeid(T));
+        if( sender_handler_check ) {
+            if( handler_map_.find(typeinfo) == handler_map_.end() ) {
+                std::cerr << "no handler registered for message type. not enqueing " << typeinfo.name() << "\n";
+                return;
+            }
+        }
+  
+        q_.emplace_back( std::move(typeinfo), make_unique<T>(std::forward<Args>(args)...), TOKEN_NONE, false );
+       
         
         lock.unlock();
         q_cond_.notify_one();
@@ -152,10 +166,18 @@ public:
     size_t emplace_return( queue *ret_queue, Args...  args ) {
         std::unique_lock<std::mutex> lock( central_mtx_ );
         
+        auto typeinfo = typeinfo_wrapper(typeid(T));
+        if( sender_handler_check ) {
+            if( handler_ret_map_.find(typeinfo) == handler_ret_map_.end() ) {
+                std::cerr << "no handler registered for message type. not enqueing " << typeinfo.name() << "\n";
+                return TOKEN_NONE;
+            }
+        }
+        
         size_t token = return_token_count_++;
         
         return_map_.emplace( token, return_entry_type(ret_queue, typeinfo_wrapper(typeid(typename T::return_type))) );
-        q_.emplace_back( typeinfo_wrapper(typeid(T)), make_unique<T>(std::forward<Args>(args)...), token, false );
+        q_.emplace_back( std::move(typeinfo), make_unique<T>(std::forward<Args>(args)...), token, false );
         
         
         lock.unlock();
@@ -169,10 +191,18 @@ public:
     void emplace_return_deluxe( queue &ret_queue, std::function<void(std::unique_ptr<typename T::return_type>)> h, Args...  args ) {
         std::unique_lock<std::mutex> lock( central_mtx_ );
         
+        auto typeinfo = typeinfo_wrapper(typeid(T));
+        if( sender_handler_check ) {
+            if( handler_ret_map_.find(typeinfo) == handler_ret_map_.end() ) {
+                std::cerr << "no handler registered for message type. not enqueing " << typeinfo.name() << "\n";
+                return;
+            }
+        }
+        
         size_t token = return_token_count_++;
         
         return_map_.emplace( token, return_entry_type(&ret_queue, typeinfo_wrapper(typeid(typename T::return_type))) );
-        q_.emplace_back( typeinfo_wrapper(typeid(T)), make_unique<T>(std::forward<Args>(args)...), token, false );
+        q_.emplace_back( std::move(typeinfo), make_unique<T>(std::forward<Args>(args)...), token, false );
         
         
         lock.unlock();

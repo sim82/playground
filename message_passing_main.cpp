@@ -70,7 +70,7 @@ public:
             
             //usleep( 10000 );
             
-           // return make_unique<msg::t1_ret>( m->m1_ );
+            return make_unique<msg::t1_ret>( m->m1_ );
 //             std::cout << "handler: msg::t1 " << m->m1_ << "\n";
             std::vector<int> v(1000, m->m1_ );
             
@@ -135,9 +135,37 @@ private:
     
 };
 
+
+// class test1 {
+//     
+// public:
+//     test1( int v ) : v_(v) {
+//         
+//     }
+//     
+//     
+//     test1( test1 && other ) {
+//         std::cout << "const: " << v_ << " " << other.v_ << "\n";
+//         
+//     }
+//     
+//     test1 &operator=(test1 && other) {
+//         std::cout << "assign: " << v_ << " " << other.v_ << "\n";
+//         
+//         return *this;
+//     }
+//     
+//     
+//     
+//     int v_;
+// };
+
 int main() {
     
+//     test1 t(1);
     
+//     t = test1(2);
+//     return 0;
     
     
     queue q;

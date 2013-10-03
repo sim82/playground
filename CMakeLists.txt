@@ -28,7 +28,7 @@ add_executable( bitset bitset.cpp )
 #add_executable( synth synth.cpp )
 #add_executable( watch_tune watch_tune.cpp )
 add_executable( reverse_bits reverse_bits.cpp )
-# add_executable( axe_parser axe_parser.cpp )
+add_executable( axe_parser axe_parser.cpp )
 add_executable( scope_rollback scope_rollback.cpp )
 add_executable( phone_code phone_code.cpp )
 
@@ -53,7 +53,7 @@ add_executable( inplace_queue_atomic inplace_queue_atomic.cpp )
 # add_executable( inplace_queue_locked inplace_queue_locked.cpp )
 
 target_link_libraries( inplace_queue_atomic pthread )
-target_link_libraries( inplace_queue_locked pthread )
+#target_link_libraries( inplace_queue_locked pthread )
 
 add_executable( message_passing message_passing.cpp message_passing_main.cpp)
 target_link_libraries( message_passing  pthread )
@@ -74,7 +74,7 @@ add_executable( fixed fixed.cpp )
 add_executable( id_map id_map.cpp )
 #add_executable( boost_async boost_async.cpp )
 add_executable( disk_hash disk_hash.cpp )
-
+add_executable( taggard taggard.cpp )
 
 # add_executable( game1 game1.cpp )
 #target_link_libraries( named_pipe pthread )

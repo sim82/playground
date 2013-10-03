@@ -34,7 +34,7 @@ void queue::dispatch ( queue::q_entry_type&& ent )
     auto it = handler_map_.find ( ent.wrap_ );
 
     if ( it == handler_map_.end() ) {
-        std::cerr << "no handler for type: " << ent.wrap_.name() << "\n";
+        std::cerr << "no handler for type (leak: subclass destructor not called!): " << ent.wrap_.name() << "\n";
         return;
     }
 
@@ -47,7 +47,7 @@ void queue::dispatch_ret ( queue::q_entry_type&& ent, queue::return_entry_type r
     auto it = handler_ret_map_.find ( ent.wrap_ );
 
     if ( it == handler_ret_map_.end() ) {
-        std::cerr << "no handler_ret for type: " << ent.wrap_.name() << "\n";
+        std::cerr << "no handler_ret for type (leak: subclass destructor not called!): " << ent.wrap_.name() << "\n";
         return;
     }
 
