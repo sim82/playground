@@ -9,6 +9,7 @@
 #include <typeinfo>
 
 #include <chrono>
+#include "buddy.h"
 
 #include <cxxabi.h>
 
@@ -156,6 +157,7 @@ public:
 
 
     int64_t alloc_id() {
+#if 0
         for( auto it = gen_n_.actors_.begin(); it != gen_n_.actors_.end(); ++it ) {
             if( it->get() == nullptr ) {
                 return std::distance( gen_n_.actors_.begin(), it );
@@ -165,6 +167,16 @@ public:
         gen_n_.actors_.push_back(nullptr);
 
         return gen_n_.actors_.size() - 1;
+#else
+        //TODO: test the buddy
+        size_t id = bb_.allocate();
+        if( gen_n_.actors_.size() <= id ) {
+            gen_n_.actors_.resize( id + 1 );
+        }
+
+        assert( gen_n_.actors_[id] == nullptr );
+        return gen_n_.actors_.size() - 1;
+#endif
     }
 
     actor &get( int64_t id ) {
@@ -174,6 +186,8 @@ public:
 private:
     actor_generation gen_n_;
     actor_generation gen_n1_;
+
+    buddy::dynamic_buddy<512> bb_;
 
 };
 
@@ -490,6 +504,8 @@ std::unique_ptr<actor> make_actor( int64_t id, const std::string &url, Args... a
 //        return std::unique_ptr<actor>(new slidemove_actor( id ));
 //    } else
 
+  //  std::cout << "make: id: " << id << "\n";
+
     if( url == "player_actor" ) {
         return std::unique_ptr<actor>(new player_actor( id ));
     } else if( url == "monster" ) {
@@ -564,7 +580,7 @@ int main() {
 
     {
         perf_time t1( "create" );
-        for( int i = 0; i < 1000; ++i ) {
+        for( int i = 0; i < 100000; ++i ) {
             int64_t id = g.alloc_id();
             const auto &type = actor_classes[rand() % actor_classes.size()];
 
