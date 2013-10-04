@@ -570,9 +570,7 @@ int main() {
     a3->think(1);
 
     std::cout << "size: " << sizeof(slidemove_actor) << "\n";
-
     std::cout << "size: " << sizeof(monster) << "\n";
-
     std::cout << "size: " << sizeof(invisible_gadget) << "\n";
 
     std::vector<std::string> actor_classes{"player_actor", "monster", "scary_monster", "invisible_gadget" };

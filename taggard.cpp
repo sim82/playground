@@ -272,7 +272,7 @@ int main() {
     std::multimap<size_t, std::pair<std::vector<song>::iterator,std::vector<song>::iterator> > ers_sizes;
 
     for( const auto & er : ers ) {
-        ers_sizes.emplace( std::distance( er.first, er.second), er );
+        ers_sizes.insert( std::make_pair(std::distance( er.first, er.second), er) );
     }
 
     std::cout << "ers: " << ers.size() << "\n";

@@ -5,13 +5,13 @@
 
 
 cmake_minimum_required(VERSION 2.8)
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -Wno-mismatched-tags  -std=c++0x")
-
+#SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -Wno-mismatched-tags  -std=c++0x")
+SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall  -std=c++0x")
 
 
 LINK_DIRECTORIES( /usr/lib/llvm )
 
-include_directories( axe/include )
+#include_directories( axe/include )
 include_directories( /space/src/boost_1_52_0 )
 #add_executable( test test.cpp )
 # add_executable( game game.cpp )
@@ -28,7 +28,7 @@ add_executable( bitset bitset.cpp )
 #add_executable( synth synth.cpp )
 #add_executable( watch_tune watch_tune.cpp )
 add_executable( reverse_bits reverse_bits.cpp )
-add_executable( axe_parser axe_parser.cpp )
+#add_executable( axe_parser axe_parser.cpp )
 add_executable( scope_rollback scope_rollback.cpp )
 add_executable( phone_code phone_code.cpp )
 
