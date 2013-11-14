@@ -91,6 +91,7 @@ target_link_libraries(framebuffer X11 )
 #add_executable(boost_spirit boost_spirit.cpp)
 
 add_executable( actor actor.cpp )
+add_executable( persistency persistency.cpp )
 # target_link_libraries(game1 X11)
 
 # target_link_libraries( llvm_plf pthread ffi dl m LLVM-3.1)
