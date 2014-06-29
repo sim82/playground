@@ -6,7 +6,7 @@
 
 cmake_minimum_required(VERSION 2.8)
 #SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -Wno-mismatched-tags  -std=c++0x")
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall  -std=c++0x")
+SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall  -std=c++1y")
 
 
 LINK_DIRECTORIES( /usr/lib/llvm )
@@ -91,7 +91,8 @@ target_link_libraries(framebuffer X11 )
 #add_executable(boost_spirit boost_spirit.cpp)
 
 add_executable( actor actor.cpp )
-add_executable( persistency persistency.cpp )
+#add_executable( persistency persistency.cpp )
+add_executable( message_passing_2 message_passing_2.cpp )
 # target_link_libraries(game1 X11)
 
 # target_link_libraries( llvm_plf pthread ffi dl m LLVM-3.1)
