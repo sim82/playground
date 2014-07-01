@@ -7,6 +7,7 @@
 #include <typeindex>
 #include <deque>
 #include <memory>
+#include <mutex>
 #include <cassert>
 
 //class abstract_save_it_for_later {
@@ -154,25 +155,32 @@ void test2( int a, float b, int c ) {
     std::cout << "test2 " << a << " " << b << "\n";
 }
 
+void test3() {
+    std::cout << "test3\n";
+}
 
-struct msgx_base {};
+struct abstract_msg {
+public:
+    virtual ~abstract_msg() {}
+};
 
 template<class... Args>
-struct A : public msgx_base
+struct msg_impl : public abstract_msg
 {
 //    using args = pack<Args...>;
     using func = std::function<void(Args...)>;
-    using tup = std::tuple<Args...>;
+    using tuple = std::tuple<Args...>;
 
-    tup payload;
+    tuple payload;
 };
 
-struct msgx1 : public A<int,float,int> {};
-struct msgx2 : public A<int,float,int> {};
+struct msgx1 : public msg_impl<int,float,int> {};
+struct msgx2 : public msg_impl<int,float,int> {};
+struct msgx3 : public msg_impl<> {};
 
 class abstract_dispatcher {
 public:
-    virtual void dispatch( msgx_base *msg ) = 0;
+    virtual void dispatch( abstract_msg &msg_impl ) = 0;
     virtual ~abstract_dispatcher() {}
 };
 
@@ -186,98 +194,78 @@ public:
     std::function<void(Args...)> func;
 
     template<std::size_t ...I>
-    void call_func(std::tuple<Args...> &params, std::index_sequence<I...>)
-    {
+    void call_func(std::tuple<Args...> &params, std::index_sequence<I...>) {
         func(std::get<I>(params)...);
     }
-    //    void delayed_dispatch() override
-    //    { call_func(std::index_sequence_for<Args...>{}); }
 
-
-    void dispatch( msgx_base *msg ) override {
-        MsgT *mx = static_cast<MsgT*>(msg);
-        call_func(mx->payload, std::index_sequence_for<Args...>{});
+    void dispatch( abstract_msg &msg ) override {
+        MsgT &mx = static_cast<MsgT&>(msg);
+        call_func(mx.payload, std::index_sequence_for<Args...>{});
     }
 };
 
 class queue {
 
-    template <typename MsgT, typename... Args>
-    struct rcr
-    {
-        /* Your original function, now inside a struct.
-         I'm using direct tuple construction and an
-         initializer list to circumvent the order-of-
-         construction problem mentioned in the comment
-         to your question. */
-        static void call(queue &d, Args... args)
-        {
-            //return rcr<MsgT,Args...>::call(args);
+    template <typename X, typename Y>
+    struct rcr {};
 
-            //        std::unique_ptr<typename MsgT::TupleType> msg( new typename MsgT::TupleType(args...));
-            MsgT *msg = new MsgT;
-            msg->payload = std::tuple<Args...>(args...);
-
-            d.q.emplace_back(std::type_index(typeid(MsgT)), msg);
-            //            auto it =
-            //            abstract_save_it_for_later *sfl = new save_it_for_later<Args...> = {std::tuple<Args...>(args...),
-        }
-
+    template <typename MsgT, typename ...Args>
+    struct rcr<MsgT,std::tuple<Args...>> {
+        /* Specialized for tuple. */
         static void register_callback(queue &d, std::function<void(Args...)> f)
         {
             std::cout << "rc: " << typeid(MsgT).name() << "\n";
-            //          d.handler_map.emplace(std::type_index(typeid(MsgT)), [=]( msgx_base &m ) {
-            //              MsgT &mx = static_cast<MsgT&>(m);
-            //              save_it_for_later<Args...> s = {mx.payload, f};
-            //              s.delayed_dispatch();
-            //          });
-            d.handler_map2.emplace(std::type_index(typeid(MsgT)), new dispatch_helper<MsgT,Args...>(f));
+            d.handler_map_.emplace(std::type_index(typeid(MsgT)), new dispatch_helper<MsgT,Args...>(f));
+            //return rcr<MsgT,Args...>::register_callback(d, f);
         }
-    };
-    template <typename MsgT, typename ...Args>
-    struct rcr<MsgT,std::tuple<Args...>>
-    {
-        /* Specialized for tuple. */
-        static void call(queue &d, Args... args)
-        {
-            return rcr<MsgT,Args...>::call(d, args...);
-        }
-
-        /* Specialized for tuple. */
-        static void register_callback(queue &d, std::function<void(Args...)> f)
-        { return rcr<MsgT,Args...>::register_callback(d, f); }
     };
 
 public:
-    template<typename A>
-    void register_callback(typename A::func x) {
-        rcr<A, typename A::tup>::register_callback(*this, x);
+    template<typename MsgT>
+    void register_callback(typename MsgT::func x) {
+        // trick: use class template specialization to resolve Args... from MsgT::tuple
+        std::lock_guard<std::mutex> lock(mtx_);
+        rcr<MsgT, typename MsgT::tuple>::register_callback(*this, x);
 
     }
 
-    template<typename A, typename ...Args>
-    void call(Args... args) {
-        rcr<A,std::tuple<Args...>>::call(*this, args...);
+    template<typename MsgT, typename ...Args>
+    inline void call(Args... args) {
+        MsgT *msg = new MsgT;
+        msg->payload = std::tuple<Args...>(args...);
+
+        std::lock_guard<std::mutex> lock(mtx_);
+        q_.emplace_back(std::type_index(typeid(MsgT)), std::unique_ptr<abstract_msg>(msg));
+        //        rcr<A,std::tuple<Args...>>::call(*this, args...);
     }
 
     void dispatch() {
-        while( !q.empty() ) {
-            const auto &ti = q.front().first;
-            msgx_base *msg = q.front().second;
+        std::unique_lock<std::mutex> lock(mtx_);
+        while( !q_.empty() ) {
+            const auto &ti = q_.front().first;
+//            abstract_msg &msg = *q.front().second;
 
-            auto it = handler_map2.find(ti);
-            assert( it != handler_map2.end() );
+            auto it = handler_map_.find(ti);
+            assert( it != handler_map_.end() );
 
             //it->second(*msg);
-            it->second->dispatch(msg);
-            q.pop_front();
+            auto *dispatcher = it->second;
+            std::unique_ptr<abstract_msg> msg = std::move(q_.front().second);
+            q_.pop_front();
+            lock.unlock();
+
+            dispatcher->dispatch(*msg);
+
+            lock.lock();
         }
     }
 
 private:
+    // lock for handler_map and q
+    std::mutex mtx_;
     //    std::unordered_map<std::type_index, std::function<void(msgx_base &m)>> handler_map;
-    std::unordered_map<std::type_index, abstract_dispatcher*> handler_map2;
-    std::deque<std::pair<std::type_index, msgx_base *>> q;
+    std::unordered_map<std::type_index, abstract_dispatcher*> handler_map_;
+    std::deque<std::pair<std::type_index, std::unique_ptr<abstract_msg>>> q_;
     //    std::deque<save_it_for_later *> q2;
 };
 int main() {
@@ -285,9 +273,10 @@ int main() {
     queue q;
     q.register_callback<msgx1>(test1);
     q.register_callback<msgx2>(test2);
+    q.register_callback<msgx3>(test3);
     q.call<msgx1>(1, 2.2, 2.2);
     q.call<msgx2>(21, 22.2, 23);
-
+    q.call<msgx3>();
     q.dispatch();
 
     return 0;
