@@ -93,6 +93,7 @@ target_link_libraries(framebuffer X11 )
 add_executable( actor actor.cpp )
 #add_executable( persistency persistency.cpp )
 add_executable( message_passing_2 message_passing_2.cpp )
+target_link_libraries(message_passing_2 pthread)
 # target_link_libraries(game1 X11)
 
 # target_link_libraries( llvm_plf pthread ffi dl m LLVM-3.1)
