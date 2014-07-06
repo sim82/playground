@@ -206,7 +206,7 @@ struct msgx1 : public msg_impl<int,float,int> {};
 struct msgx2 : public msg_impl<int,float,int> {};
 struct msgx3 : public msg_impl<> {};
 struct msgx4 : public msg_impl<std::unique_ptr<testxxx>> {};
-struct msgx5 : public msg_impl<int,float,int> {};
+struct msgx5 : public msg_impl<std::unique_ptr<testxxx>,int,float,int> {};
 struct msg_stop : public msg_impl<> {};
 struct msg_stop_trick : public msg_impl<> {};
 
@@ -234,7 +234,7 @@ struct msg_ret_impl : public abstract_msg
     tuple payload;
 };
 
-struct msgr1 : public msg_ret_impl<msgx5,int,float,int> {};
+struct msgr1 : public msg_ret_impl<msgx5,int,float,int, std::unique_ptr<testxxx>> {};
 struct msgr_stop_trick : public msg_ret_impl<msg_stop_trick> {};
 
 class queue {
@@ -361,7 +361,7 @@ private:
             std::unique_ptr<MsgT> mx(static_cast<MsgT*>(msg.release()));
             auto ret = call_func(std::move(mx->payload), std::index_sequence_for<Args...>{});
 
-            target_q->call_ret<return_message>(ret, token);
+            target_q->call_with_token<return_message>(std::move(ret), token);
             //call_return<typename MsgT::return_message>(target_q, ret, std::index_sequence_for<Args...>{});
         }
     };
@@ -478,30 +478,6 @@ public:
         cond_var_.notify_one();
     }
 
-    template<typename MsgT>
-    int add_token_callback( typename MsgT::func f ) {
-        std::lock_guard<std::mutex> lock(mtx_);
-        auto token = next_return_token_++;
-        register_callback_helper<MsgT, typename MsgT::tuple>::register_token_callback(*this, token, f);
-
-        return token;
-    }
-
-    template<typename MsgT>
-    inline void call_ret(typename MsgT::tuple ret_tuple, int token) {
-        std::unique_ptr<MsgT> msg = std::make_unique<MsgT>();
-
-        // TODO: check if we can create the pyload tuple in place rather than moving to the default initialized thing
-        msg->payload = ret_tuple;
-
-//        std::unique_ptr<MsgT> msg = std::make_unique<MsgT>({std::tuple<Args...>(std::forward<Args>(args)...)});
-
-
-        std::lock_guard<std::mutex> lock(mtx_);
-        q_.emplace_back(std::type_index(typeid(MsgT)), std::move(msg), nullptr, token);
-        //        rcr<A,std::tuple<Args...>>::call(*this, args...);
-        cond_var_.notify_one();
-    }
 
     void stop() {
         std::unique_lock<std::mutex> lock(mtx_);
@@ -564,6 +540,32 @@ private:
         handler_map_.erase(iter);
     }
 
+    template<typename MsgT>
+    int add_token_callback( typename MsgT::func f ) {
+        std::lock_guard<std::mutex> lock(mtx_);
+        auto token = next_return_token_++;
+        register_callback_helper<MsgT, typename MsgT::tuple>::register_token_callback(*this, token, f);
+
+        return token;
+    }
+
+    template<typename MsgT>
+    inline void call_with_token( typename MsgT::tuple &&ret_tuple, int token) {
+        std::unique_ptr<MsgT> msg = std::make_unique<MsgT>();
+
+        // TODO: check if we can create the pyload tuple in place rather than moving to the default initialized thing
+        msg->payload = std::move(ret_tuple);
+
+//        std::unique_ptr<MsgT> msg = std::make_unique<MsgT>({std::tuple<Args...>(std::forward<Args>(args)...)});
+
+
+        std::lock_guard<std::mutex> lock(mtx_);
+        q_.emplace_back(std::type_index(typeid(MsgT)), std::move(msg), nullptr, token);
+        //        rcr<A,std::tuple<Args...>>::call(*this, args...);
+        cond_var_.notify_one();
+    }
+
+
     // lock for handler_map and q
     std::mutex mtx_;
     std::condition_variable cond_var_;
@@ -606,9 +608,9 @@ void cons_thread(queue &q) {
 void ret_thread2(queue &q) {
     std::cout << "thread 2: " << (void*)pthread_self() << std::endl;
 
-    auto gr1 = q.register_callback_ret<msgr1>([](int a, float b, int c) {
+    auto gr1 = q.register_callback_ret<msgr1>([](int a, float b, int c, std::unique_ptr<testxxx> p) {
 //        std::cout << "testr1: " << (void*)pthread_self() << std::dec << " " << a << " " << b << " " << c << std::endl;
-        return std::make_tuple(a * 2, b * 3, c * 4);
+        return std::make_tuple(std::move(p), a * 2, b * 3, c * 4);
     });
 
 
@@ -635,11 +637,11 @@ void test_return() {
     std::thread t2([&](){ret_thread2(q2);});
 
 
-    for( size_t i = 0; i < 10000; ++i ) {
-        q2.call2<msgr1>(&q, [](int a, float b, int c){
+    for( size_t i = 0; i < 1000000; ++i ) {
+        q2.call2<msgr1>(&q, [](std::unique_ptr<testxxx>, int a, float b, int c){
 //            std::cout << "return testr1: " << (void*)pthread_self() << std::dec << " " << a << " " << b << " " << c << std::endl;
         }
-        , 3, 4.0, 5);
+        , 3, 4.0, 5, std::unique_ptr<testxxx>());
     }
 
 
