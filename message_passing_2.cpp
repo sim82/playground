@@ -240,9 +240,16 @@ struct msgr_stop_trick : public msg_ret_impl<msg_stop_trick> {};
 class queue {
     class abstract_dispatcher;
     class abstract_dispatcher_ret;
+
+    struct token_map_hash {
+        size_t operator()(const std::pair<std::type_index, int> &v) const {
+            return std::hash<std::type_index>()(v.first) ^ std::hash<int>()(v.second);
+        }
+    };
+
 public:
     typedef std::unordered_map<std::type_index, std::unique_ptr<abstract_dispatcher>> handler_map_type;
-    typedef std::map<std::pair<std::type_index, int>, std::unique_ptr<abstract_dispatcher>> token_handler_map_type;
+    typedef std::unordered_map<std::pair<std::type_index, int>, std::unique_ptr<abstract_dispatcher>, token_map_hash> token_handler_map_type;
 //    typedef std::unordered_map<std::type_index, abstract_dispatcher_ret*> handler_ret_map_type;
     class callback_guard {
     public:
@@ -628,7 +635,7 @@ void test_return() {
     std::thread t2([&](){ret_thread2(q2);});
 
 
-    for( size_t i = 0; i < 100000; ++i ) {
+    for( size_t i = 0; i < 10000; ++i ) {
         q2.call2<msgr1>(&q, [](int a, float b, int c){
 //            std::cout << "return testr1: " << (void*)pthread_self() << std::dec << " " << a << " " << b << " " << c << std::endl;
         }
@@ -657,7 +664,7 @@ void test_return() {
 }
 
 int main() {
-
+#if 0
     queue q;
     auto g1 = q.register_callback<msgx1>(test1);
     auto g2 = q.register_callback<msgx2>(test2);
@@ -686,9 +693,10 @@ int main() {
     std::cout << "joined\n";
 
     return 0;
-
+#else
     test_return();
     return 0;
+#endif
     //    save_it_for_later<int,float> x = {std::make_tuple(1, 66.6f), test1 };
     //    x.delayed_dispatch();
 
