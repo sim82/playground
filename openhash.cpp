@@ -28,11 +28,85 @@ template<typename entry_type
          , typename entry_to_key_func = identity_func<entry_type>>
          //, typename equal_func = default_equal<entry_type>/*, typename deleted*/>
 class hash_table {
+    typedef empty empty_xxx;
 public:
+    template<typename empty_type>
+    class iterator_impl /*: private std::vector<entry_type>::iterator*/ {
+        typedef typename std::vector<entry_type>::iterator iterator_type;
+
+    public:
+        typedef typename  iterator_type::pointer pointer;
+        typedef typename  iterator_type::reference reference;
+
+        iterator_impl( iterator_type it, iterator_type end ) : it_(it), end_it_(end) {}
+
+        inline void next_not_null()
+        {
+            empty e;
+            while (true)
+            {
+                ++it_;
+                if ( it_ == end_it_ || (!e.is(*it_)))
+                {
+                    break;
+                }
+            }
+        }
+
+//        using iterator_type::operator ==;
+//        using iterator_type::operator *;
+//        using iterator_type::operator->;
+
+        inline bool operator==(iterator_impl other) const {
+            return it_ == other.it_;
+        }
+        inline bool operator!=(iterator_impl other) const {
+            return !operator==(other);
+        }
+
+        inline reference operator*() {
+            return *it_;
+        }
+        inline pointer operator->() {
+            return &(*it_);
+        }
+
+
+        inline iterator_impl& operator++()
+        {
+          this->next_not_null();
+          return *this;
+        }
+        inline iterator_impl operator++(int)
+        {
+          iterator t = *this;
+          ++(*this);
+          return t;
+        }
+    private:
+        iterator_type it_;
+        iterator_type end_it_;
+    };
+
+    typedef iterator_impl<empty> iterator;
+
     hash_table( const size_t init_size = 8 )
         : table_(make_table(init_size))
         , num_used_(0)
     {
+    }
+
+    iterator begin() {
+        iterator it(table_.begin(), table_.end());
+
+        if( empty_.is(*it)) {
+            it.next_not_null();
+        }
+        return it;
+    }
+
+    iterator end() {
+        return iterator(table_.end(), table_.end());
     }
 
     void print() {
@@ -263,6 +337,10 @@ class map
 {
 
 public:
+    typedef typename impl_type::iterator iterator;
+
+    using impl_type::begin;
+    using impl_type::end;
     using impl_type::insert;
     using impl_type::emplace;
     using impl_type::erase;
@@ -300,10 +378,10 @@ void test_map2();
 
 
 struct test_value {
-    test_value() /*: x_(0)*/ {}
-    explicit test_value(size_t x) /*: x_(x)*/ {}
-    std::array<size_t, 64> x_;
-
+    test_value() : x_(0) {}
+    explicit test_value(size_t x) : x_(x) {}
+    //std::array<size_t, 64> x_;
+    size_t x_;
     test_value(const test_value &other ) {
         x_ = other.x_;
     }
@@ -321,6 +399,11 @@ struct test_value {
     test_value &operator=(test_value &&other) {
         std::swap(x_, other.x_);
         return *this;
+    }
+
+    bool operator==( const test_value &other ) const {
+        return x_ == other.x_;
+
     }
 };
 
@@ -458,7 +541,7 @@ void test_map2() {
 
     auto t1 = clock::now();
 #define MY_HT
-//#define REF_HT
+#define REF_HT
 
     for( size_t i = 0; i < num_iter; ++i ) {
         size_t value = rnum[i*2];
@@ -501,8 +584,11 @@ void test_map2() {
     std::cout << "ms0: " << std::chrono::duration_cast<std::chrono::milliseconds>(dt0).count() << "\n";
     std::cout << "ms: " << std::chrono::duration_cast<std::chrono::milliseconds>(dt).count() << "\n";
 
-    auto vec = ht.to_vector();
-    rm_type cs(vec.begin(), vec.end());
+    //auto vec = ht.to_vector();
+    //rm_type cs(vec.begin(), vec.end());
+    rm_type cs(ht.begin(), ht.end());
+//    if( ht.begin() == ht.end() ) {
 
-  //  std::cout << "equal: " << (cs == refmap) << "\n";
+//    }
+    std::cout << "equal: " << (cs == refmap) << "\n";
 }
