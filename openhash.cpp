@@ -4,8 +4,8 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <chrono>
-
-#include "openhash/hash_map.h"
+#include <vector>
+//#include "openhash/hash_map.h"
 
 template<typename value_type>
 struct default_equal {
@@ -16,7 +16,7 @@ struct default_equal {
 
 template<typename value_type>
 struct identity_func {
-    inline const value_type& operator()(const value_type &v) {
+    inline const value_type& operator()(const value_type &v) const {
         return v;
     }
 };
@@ -30,9 +30,10 @@ template<typename entry_type
 class hash_table {
     typedef empty empty_xxx;
 public:
-    template<typename empty_type>
+
+    template<typename empty_type, typename iterator_type>
     class iterator_impl /*: private std::vector<entry_type>::iterator*/ {
-        typedef typename std::vector<entry_type>::iterator iterator_type;
+        //typedef typename std::vector<entry_type>::iterator iterator_type;
 
     public:
         typedef typename  iterator_type::pointer pointer;
@@ -88,12 +89,33 @@ public:
         iterator_type end_it_;
     };
 
-    typedef iterator_impl<empty> iterator;
+    typedef iterator_impl<empty, typename std::vector<entry_type>::iterator> iterator;
+    typedef iterator_impl<empty, typename std::vector<entry_type>::const_iterator> const_iterator;
 
     hash_table( const size_t init_size = 8 )
         : table_(make_table(init_size))
         , num_used_(0)
     {
+    }
+
+    iterator find(const key_type &key) {
+        const size_t i = find_slot(key);
+
+        if( !empty_.is(table_[i])) {
+            return iterator(table_.begin() + i, table_.end());
+        } else {
+            return iterator(table_.end(), table_.end());
+        }
+    }
+
+    const_iterator find(const key_type &key) const {
+        const size_t i = find_slot(key);
+
+        if( !empty_.is(table_[i])) {
+            return const_iterator(table_.begin() + i, table_.end());
+        } else {
+            return const_iterator(table_.end(), table_.end());
+        }
     }
 
     iterator begin() {
@@ -107,6 +129,19 @@ public:
 
     iterator end() {
         return iterator(table_.end(), table_.end());
+    }
+
+    const_iterator begin() const {
+        const_iterator it(table_.begin(), table_.end());
+
+        if( empty_.is(*it)) {
+            it.next_not_null();
+        }
+        return it;
+    }
+
+    const_iterator end() const {
+        return const_iterator(table_.end(), table_.end());
     }
 
     void print() {
@@ -131,7 +166,7 @@ public:
         return vec;
     }
 
-    inline size_t find_slot(const key_type &entry ) {
+    inline size_t find_slot(const key_type &entry ) const {
         //const size_t s = table_.size();
         size_t i = ht_mod(hash_(entry));
         // search until we either find the key, or find an empty slot.
@@ -216,6 +251,12 @@ public:
     inline size_t size() const {
         return num_used_;
     }
+
+    inline bool contains( const key_type &key ) const {
+        size_t i = find_slot(key);
+
+        return !empty_.is(table_[i]);
+    }
 private:
     void check_and_grow() {
         const static auto max_fill_factor = 0.7;
@@ -248,7 +289,7 @@ private:
         return std::vector<entry_type>(size, empty_.make());
     }
 
-    inline size_t ht_mod(size_t v) {
+    inline size_t ht_mod(size_t v) const {
         //return v % table_.size();
 #if 0
         size_t v1 = v % table_.size();
@@ -281,6 +322,8 @@ public:
     using impl_type::insert;
     using impl_type::emplace;
     using impl_type::erase;
+    using impl_type::contains;
+    using impl_type::find;
     using impl_type::print;
     using impl_type::to_vector;
 private:
@@ -344,6 +387,8 @@ public:
     using impl_type::insert;
     using impl_type::emplace;
     using impl_type::erase;
+    using impl_type::contains;
+    using impl_type::find;
     using impl_type::print;
     using impl_type::to_vector;
     using impl_type::size;
@@ -375,13 +420,13 @@ struct size_t_deleted {
 void test();
 void test_map();
 void test_map2();
-
+void test_set2();
 
 struct test_value {
-    test_value() : x_(0) {}
-    explicit test_value(size_t x) : x_(x) {}
-    //std::array<size_t, 64> x_;
-    size_t x_;
+    test_value() /*: x_(0)*/ {}
+    explicit test_value(size_t x) /*: x_(x)*/ {}
+    std::array<char, 1024*32> x_;
+//    size_t x_;
     test_value(const test_value &other ) {
         x_ = other.x_;
     }
@@ -407,6 +452,13 @@ struct test_value {
     }
 };
 
+void test_const( const map<size_t, test_value, std::hash<size_t>, size_t_empty> &const_map ) {
+    for( auto it = const_map.begin(), eit = const_map.end(); it != eit; ++it ) {
+        std::cout << "const: " << it->first << "\n";
+//        it->second = test_value(4);
+    }
+}
+
 int main() {
     //typedef hash_table<size_t, std::hash<size_t>, size_t_empty/*, size_t_deleted*/> ht_type;
 
@@ -417,10 +469,11 @@ int main() {
     ht.emplace(2, test_value(2));
     ht.erase(2);
     ht.emplace(2, test_value(2));
-
+    test_const(ht);
 //    test_map();
    // test();
-    test_map2();
+   // test_map2();
+     test_set2();
     return 0;
 
 
@@ -522,8 +575,8 @@ void test_map2() {
     typedef map<size_t, test_value, std::hash<size_t>, size_t_empty/*, size_t_deleted*/> ht_type;
 
     ht_type ht;
-    //typedef std::unordered_map<size_t, test_value> rm_type;
-    typedef std::map<size_t, test_value> rm_type;
+    typedef std::unordered_map<size_t, test_value> rm_type;
+    //typedef std::map<size_t, test_value> rm_type;
     rm_type refmap;
 
     size_t_empty bad1;
@@ -540,7 +593,7 @@ void test_map2() {
     }
 
     auto t1 = clock::now();
-#define MY_HT
+//#define MY_HT
 #define REF_HT
 
     for( size_t i = 0; i < num_iter; ++i ) {
@@ -584,11 +637,117 @@ void test_map2() {
     std::cout << "ms0: " << std::chrono::duration_cast<std::chrono::milliseconds>(dt0).count() << "\n";
     std::cout << "ms: " << std::chrono::duration_cast<std::chrono::milliseconds>(dt).count() << "\n";
 
-    //auto vec = ht.to_vector();
-    //rm_type cs(vec.begin(), vec.end());
-    rm_type cs(ht.begin(), ht.end());
+    auto vec = ht.to_vector();
+    rm_type cs(vec.begin(), vec.end());
+   // rm_type cs(ht.begin(), ht.end());
 //    if( ht.begin() == ht.end() ) {
 
 //    }
     std::cout << "equal: " << (cs == refmap) << "\n";
+}
+
+
+//void test_set2() {
+//    typedef set<size_t, std::hash<size_t>, size_t_empty> ht_type;
+
+//    ht_type ht;
+//    typedef std::unordered_set<size_t> rm_type;
+//    //typedef std::map<size_t, test_value> rm_type;
+//    rm_type refmap;
+
+//    size_t_empty bad1;
+//    //size_t_deleted bad2;
+//    typedef std::chrono::high_resolution_clock clock;
+
+//    std::vector<uint32_t> rnum;
+//    const size_t num_iter = 10000000;
+//    rnum.reserve(num_iter);
+
+//    for(size_t i = 0; i < num_iter * 2; ++i ) {
+//        rnum.push_back(rand() % 10000);
+//        while(bad1.is(rnum.back())) {
+//            ++rnum.back();
+//        }
+
+
+//    }
+
+//    for( size_t i = 0; i < 5000; ++i ) {
+//        size_t num = rand() % 10000;
+//        refmap.insert(num);
+//        ht.insert(num);
+//    }
+
+//    size_t nfound = 0;
+
+//    auto t1 = clock::now();
+//    for( size_t i = 0; i < num_iter; ++i ) {
+//#if 0
+//        if( ht.contains(size_t(rnum[i])) ) {
+//            ++nfound;
+//        }
+//#else
+//        if( refmap.find(size_t(rnum[i])) != refmap.end() ) {
+////        if( refmap.count(size_t(rnum[i])) == 1 ) {
+//          ++nfound;
+//        }
+//#endif
+//    }
+
+//    auto dt = clock::now() - t1;
+//    std::cout << "ms: " << std::chrono::duration_cast<std::chrono::milliseconds>(dt).count() << "\n";
+//    std::cout << "nfound: " << nfound << "\n";
+//}
+
+void test_set2() {
+    typedef map<size_t, test_value, std::hash<size_t>, size_t_empty> ht_type;
+
+    ht_type ht;
+    typedef std::unordered_map<size_t, test_value> rm_type;
+    //typedef std::map<size_t, test_value> rm_type;
+    rm_type refmap;
+
+    size_t_empty bad1;
+    //size_t_deleted bad2;
+    typedef std::chrono::high_resolution_clock clock;
+
+    std::vector<uint32_t> rnum;
+    const size_t num_iter = 10000000;
+    rnum.reserve(num_iter);
+
+    for(size_t i = 0; i < num_iter * 2; ++i ) {
+        rnum.push_back(rand() % 10000);
+        while(bad1.is(rnum.back())) {
+            ++rnum.back();
+        }
+
+
+    }
+
+    for( size_t i = 0; i < 5000; ++i ) {
+        size_t num = rand() % 10000;
+        refmap.emplace(num, test_value(2));
+        ht.emplace(num, test_value(2));
+    }
+
+    size_t nfound = 0;
+
+    auto t1 = clock::now();
+    for( size_t i = 0; i < num_iter; ++i ) {
+#if 1
+        //if( ht.contains(size_t(rnum[i])) ) {
+        if( ht.find(size_t(rnum[i])) != ht.end() ) {
+            ++nfound;
+        }
+#else
+        if( refmap.find(size_t(rnum[i])) != refmap.end() ) {
+//        if( refmap.count(size_t(rnum[i])) == 1 ) {
+          ++nfound;
+        }
+#endif
+    }
+
+    auto dt = clock::now() - t1;
+    std::cout << "ms: " << std::chrono::duration_cast<std::chrono::milliseconds>(dt).count() << "\n";
+    std::cout << "nfound: " << nfound << "\n";
 }
