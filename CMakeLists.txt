@@ -6,7 +6,7 @@
 
 cmake_minimum_required(VERSION 2.8)
 #SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -Wno-mismatched-tags  -std=c++0x")
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall  -std=c++0x")
+SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall  -std=c++1y")
 
 
 LINK_DIRECTORIES( /usr/lib/llvm )
@@ -48,6 +48,7 @@ add_executable( framebuffer framebuffer.cpp )
 add_executable( emator emator.cpp )
 #add_executable( rel_ptr rel_ptr.cpp )
 add_executable( buddy buddy.cpp )
+add_executable( lz77 lz77.cpp )
 #add_executable( inplace_queue inplace_queue.cpp )
 #add_executable( inplace_queue_atomic inplace_queue_atomic.cpp )
 # add_executable( inplace_queue_locked inplace_queue_locked.cpp )
@@ -58,6 +59,8 @@ add_executable( buddy buddy.cpp )
 add_executable( message_passing message_passing.cpp message_passing_main.cpp)
 target_link_libraries( message_passing  pthread )
 
+add_executable(implant implant.cpp)
+add_executable(malloc_bench malloc_bench.cpp)
 # add_executable( llvm_plf llvm_plf.cpp )
 
 # add_executable( game1 game1.cpp entity.cpp game1_entity.cpp )
@@ -89,7 +92,12 @@ target_link_libraries(framebuffer X11 )
 #add_executable(boost_spirit boost_spirit.cpp)
 
 add_executable( actor actor.cpp )
-add_executable( persistency persistency.cpp )
+#add_executable( persistency persistency.cpp )
+add_executable( message_passing_2 message_passing_2.cpp mp2.cpp )
+target_link_libraries(message_passing_2 pthread)
+
+
+add_executable( openhash openhash.cpp )
 # target_link_libraries(game1 X11)
 
 # target_link_libraries( llvm_plf pthread ffi dl m LLVM-3.1)
