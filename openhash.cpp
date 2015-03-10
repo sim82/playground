@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <chrono>
 #include <vector>
+#include <memory>
 //#include "openhash/hash_map.h"
 
 template<typename value_type>
@@ -286,7 +287,13 @@ private:
 
     std::vector<entry_type> make_table(size_t size)
     {
-        return std::vector<entry_type>(size, empty_.make());
+        //return std::vector<entry_type>(size, empty_.make());
+        std::vector<entry_type> v;
+        v.reserve(size);
+        while( v.size() < size ) {
+            v.emplace_back(empty_.make());
+        }
+        return v;
     }
 
     inline size_t ht_mod(size_t v) const {
@@ -459,9 +466,33 @@ void test_const( const map<size_t, test_value, std::hash<size_t>, size_t_empty> 
     }
 }
 
+class test1 {
+
+};
+
+std::vector<std::pair<size_t, std::unique_ptr<test1>>> make_table(size_t size)
+{
+    empty_adapter<size_t_empty, size_t, std::unique_ptr<test1>> empty;
+    //return std::vector<std::pair<size_t, std::unique_ptr<test1>>>(size, empty.make());
+    std::vector<std::pair<size_t, std::unique_ptr<test1>>> v;
+    v.reserve(size);
+    while( v.size() < size ) {
+        v.emplace_back(empty.make());
+    }
+    return v;
+}
+
 int main() {
     //typedef hash_table<size_t, std::hash<size_t>, size_t_empty/*, size_t_deleted*/> ht_type;
 
+    {
+        map<size_t, std::unique_ptr<test1>, std::hash<size_t>, size_t_empty> m1;
+
+        std::vector<std::pair<size_t, std::unique_ptr<test1>>> v1 = make_table(10);
+        std::vector<std::pair<size_t, std::unique_ptr<test1>>> v2;
+
+        v2 = std::move(v1);
+    }
     typedef map<size_t, test_value, std::hash<size_t>, size_t_empty/*, size_t_deleted*/> ht_type;
     ht_type ht;
 

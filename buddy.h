@@ -75,7 +75,7 @@ public:
      size_t allocate( size_t bs_user ) {
         size_t ml = min_level( bs_user );
         size_t bs = block_size( ml );
-        size_t b = make_free_on_level( ml );
+        size_t b = make_free_on_level( ml, 0 );
 
         assert( b != size_t(-1) );
         return bs * b;
@@ -128,10 +128,10 @@ private:
 
         return level;
     }
-    size_t find_free_on_level( size_t level ) {
+    size_t find_free_on_level( size_t level, size_t start ) {
 
         size_t ls = level_size(level);
-        for( size_t i = 0; i < ls; ++i ) {
+        for( size_t i = start; i < ls; ++i ) {
             if( get( level, i ) ) {
                 return i;
             }
@@ -142,20 +142,20 @@ private:
     }
 
 
-    size_t make_free_on_level( size_t level ) {
+    size_t make_free_on_level( size_t level, size_t start ) {
 
         if( level >= num_levels_ ) {
             return size_t(-1);
         }
 
-        size_t b = find_free_on_level( level );
+        size_t b = find_free_on_level( level, start );
 
         if( b != size_t(-1) ) {
             set( level, b, false );
             return b;
         }
 
-        size_t nlb = make_free_on_level( level + 1 );
+        size_t nlb = make_free_on_level( level + 1, b * 2 );
 
         if( nlb == size_t(-1) ) {
             throw std::runtime_error( "out of memory" );
@@ -283,6 +283,93 @@ private:
     std::vector<size_t> bb_num_alloc_;
 
 };
+
+//template<size_t Size>
+//class bitmap_tree {
+//    const static size_t num_levels_ = static_log2<Size>::value + 1;
+//public:
+//    bitmap_tree() {
+//        for( size_t i = 0; i < num_levels_; ++i ) {
+//            level_offset_[i] = level_offset_calc(i);
+//            level_size_[i] = level_size_calc(i);
+//            block_size_[i] = block_size_calc(i);
+//        }
+
+//    }
+
+//    size_t allocate() {
+//        size_t level_size = 2;
+//        size_t offset = 0;
+
+//        while(true) {
+//            for( size_t i = 0; i < 2; ++i ) {
+//                if( !bs_[offset + i] ) {
+//                    offset += level_size + ;
+//                }
+//            }
+//        }
+//        if( bs_[0] ) {
+//            return size_t(-1);
+//        }
+//        ++level;
+//        size_t offset = 0;
+//        for( ; level < num_levels_; ++level ) {
+//            size_t lo = level_offset(level);
+//            offset *= 2;
+
+//            if( !bs_[lo + offset] ) {
+//                continue;
+//            } else if( !)
+
+//        }
+//    }
+
+//private:
+//    bool get( size_t level, size_t off ) {
+//        if( off >= level_size( level ) ) {
+//            throw std::runtime_error( "offset out of range" );
+//        }
+//        return bs_[level_offset( level ) + off];
+//    }
+
+//    void set( size_t level, size_t off, bool v ) {
+//        if( off >= level_size( level ) ) {
+//            throw std::runtime_error( "offset out of range" );
+//        }
+//        bs_[level_offset( level ) + off] = v;
+//    }
+
+//    size_t level_size_calc( size_t level ) {
+//        size_t s = 1;
+//        for( size_t i = 0; i < level; ++i ) {
+//            s *= 2;
+//        }
+
+//        return s;
+//    }
+
+//    size_t level_offset_calc( size_t level ) {
+//        size_t all_s = 0;
+//        for( size_t i = 0; i < level; ++i ) {
+//            all_s += level_size_calc( i );
+//        }
+
+//        return all_s;
+//    }
+
+//    inline size_t level_size( size_t level ) {
+//        return level_size_[level];
+//    }
+
+//    inline size_t level_offset( size_t level ) {
+//        return level_offset_[level];
+//    }
+
+
+//    std::bitset<Size * 2> bs_;
+//    std::array<size_t,num_levels_> level_size_;
+//    std::array<size_t,num_levels_> level_offset_;
+//};
 
 }
 #endif // BUDDY_H

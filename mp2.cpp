@@ -36,7 +36,7 @@ bool d3d::ortho::mp2::queue::dispatch_pop() {
     //            abstract_msg &msg = *q.front().second;
 
 
-    std::unique_ptr<abstract_msg> msg = std::move(std::get<1>(q_.front()));
+    fsa::unique_ptr<abstract_msg> msg = std::move(std::get<1>(q_.front()));
     auto *target_q = std::get<2>(q_.front());
     auto token = std::get<3>(q_.front());
     std::unique_ptr<abstract_dispatcher> delete_dispatcher;

@@ -282,6 +282,50 @@ void test_return() {
 //    getchar();
 }
 
+
+void test_return2() {
+    std::cout << "main thread: " << (void*)pthread_self() << std::endl;
+    d3d::ortho::mp2::queue q;
+
+    d3d::ortho::mp2::queue q2;//&other_q = start_ret_consumer();
+    q.add_default_stop_handler();
+    q2.add_default_stop_handler();
+
+    std::thread t2([&](){ret_thread2(q2);});
+
+
+
+    size_t i = 0;
+    while(true) {
+        if( i < 1000000 ) {
+            q2.call2<msgr1>(&q, [](std::unique_ptr<testxxx>, int a, float b, int c){
+    //            std::cout << "return testr1: " << (void*)pthread_self() << std::dec << " " << a << " " << b << " " << c << std::endl;
+            }
+            , 3, 4.0, 5, std::unique_ptr<testxxx>());
+        } else {
+            q2.call2<msgr_stop_trick>(&q, [&]() {
+                q.call<d3d::ortho::mp2::msg_stop>();
+            });
+            q2.call<d3d::ortho::mp2::msg_stop>();
+
+        }
+        ++i;
+
+        if( !q.dispatch_pop() ) {
+            break;
+        }
+    }
+
+    t2.join();
+    std::cout << "t2 joined\n";
+
+
+    std::cout << "main thread ret: " << i << std::endl;
+
+//    getchar();
+}
+
+
 int main() {
 #if 0
     queue q;
@@ -313,7 +357,7 @@ int main() {
 
     return 0;
 #else
-    test_return();
+    test_return2();
     return 0;
 #endif
     //    save_it_for_later<int,float> x = {std::make_tuple(1, 66.6f), test1 };

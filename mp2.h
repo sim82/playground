@@ -15,7 +15,7 @@
 #include <thread>
 #include <condition_variable>
 #include <map>
-
+#include "fsa.h"
 
 
 namespace d3d { namespace ortho {
@@ -104,7 +104,7 @@ public:
 private:
     class abstract_dispatcher {
     public:
-        virtual void dispatch( std::unique_ptr<abstract_msg> msg, queue *target_q, int token ) = 0;
+        virtual void dispatch( fsa::unique_ptr<abstract_msg> msg, queue *target_q, int token ) = 0;
         virtual ~abstract_dispatcher() {}
     };
 
@@ -122,8 +122,9 @@ private:
             func(std::get<I>(std::move(params))...);
         }
 
-        inline void dispatch( std::unique_ptr<abstract_msg> msg, queue *, int ) override {
-            std::unique_ptr<MsgT> mx(static_cast<MsgT*>(msg.release()));
+        inline void dispatch( fsa::unique_ptr<abstract_msg> msg, queue *, int ) override {
+            //fsa::unique_ptr<MsgT> mx(msg.static_cast_move<MsgT>());
+            fsa::unique_ptr<MsgT> mx(fsa::static_cast_move<MsgT>(std::move(msg)));
             call_func(std::move(mx->payload), std::index_sequence_for<Args...>{});
         }
     };
@@ -157,8 +158,9 @@ private:
 //            q->call<RetMsgT>(std::get<I>(std::move(params))...);
 //        }
 
-        inline void dispatch( std::unique_ptr<abstract_msg> msg, queue *target_q, int token ) override {
-            std::unique_ptr<MsgT> mx(static_cast<MsgT*>(msg.release()));
+        inline void dispatch( fsa::unique_ptr<abstract_msg> msg, queue *target_q, int token ) override {
+            //fsa::unique_ptr<MsgT> mx(msg.static_cast_move<MsgT>());
+            fsa::unique_ptr<MsgT> mx(fsa::static_cast_move<MsgT>(std::move(msg)));
             auto ret = call_func(std::move(mx->payload), std::index_sequence_for<Args...>{});
 
             target_q->call_with_token<return_message>(std::move(ret), token);
@@ -238,7 +240,7 @@ public:
 
     template<typename MsgT, typename... Args>
     inline void call(Args&&... args) {
-        std::unique_ptr<MsgT> msg = std::make_unique<MsgT>();
+        fsa::unique_ptr<MsgT> msg(alloc_.allocate<MsgT>());
 
         // TODO: check if we can create the pyload tuple in place rather than moving to the default initialized thing
         msg->payload = std::tuple<Args...>(std::forward<Args>(args)...);
@@ -254,7 +256,7 @@ public:
 
     template<typename MsgT, typename... Args>
     inline void call2(queue *target_q, typename MsgT::return_func ret_func, Args&&... args) {
-        std::unique_ptr<MsgT> msg = std::make_unique<MsgT>();
+        fsa::unique_ptr<MsgT> msg(alloc_.allocate<MsgT>());
 
         // TODO: check if we can create the pyload tuple in place rather than moving to the default initialized thing
         msg->payload = std::tuple<Args...>(std::forward<Args>(args)...);
@@ -290,7 +292,7 @@ private:
 
     template<typename MsgT>
     inline void call_with_token( typename MsgT::tuple &&ret_tuple, int token) {
-        std::unique_ptr<MsgT> msg = std::make_unique<MsgT>();
+        fsa::unique_ptr<MsgT> msg(alloc_.allocate<MsgT>());
 
         // TODO: check if we can create the pyload tuple in place rather than moving to the default initialized thing
         msg->payload = std::move(ret_tuple);
@@ -315,7 +317,8 @@ private:
     token_handler_map_type token_handler_map_;
 //    handler_ret_map_type handler_ret_map_;
 
-    std::deque<std::tuple<std::type_index, std::unique_ptr<abstract_msg>, queue *, int>> q_;
+    fsa::allocator_chain alloc_;
+    std::deque<std::tuple<std::type_index, fsa::unique_ptr<abstract_msg>, queue *, int>> q_;
     //    std::deque<save_it_for_later *> q2;
     callback_guard stop_handler_guard_;
     int next_return_token_;
