@@ -78,6 +78,7 @@ add_executable( id_map id_map.cpp )
 #add_executable( boost_async boost_async.cpp )
 add_executable( disk_hash disk_hash.cpp )
 add_executable( taggard taggard.cpp )
+add_executable( binary_heap binary_heap.cpp )
 
 # add_executable( game1 game1.cpp )
 #target_link_libraries( named_pipe pthread )
@@ -100,6 +101,9 @@ add_executable( openhash openhash.cpp )
 add_executable( nested_coroutine nested_coroutine.cpp )
 
 add_executable( fsa fsa.cpp )
+
+add_executable( message_passing_3 message_passing_3.cpp mp3.cpp )
+
 add_executable( ml_bitmap ml_bitmap.cpp )
 
 add_executable( spirit spirit.cpp)

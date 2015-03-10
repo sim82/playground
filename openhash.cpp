@@ -363,12 +363,12 @@ struct entry_to_key_adapter{
 template<typename empty, typename key_type, typename value_type>
 struct empty_adapter{
     inline std::pair<key_type, value_type> make() const {
-        const static empty e;
+        const empty e;
         return {e.make(), value_type()}; //size_t(-1);
     }
 
     inline bool is( const std::pair<key_type, value_type> &p ) const {
-        const static empty e;
+        const empty e;
         return e.is(p.first);
     }
 };
@@ -404,6 +404,9 @@ private:
 };
 
 struct size_t_empty {
+    size_t_empty()
+    {}
+
     inline size_t make() const {
         return 0;
     }

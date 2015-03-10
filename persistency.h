@@ -329,17 +329,17 @@ public:
     }
 
 
-    template<typename Tiiter, typename Toiter>
-    void persist_range( Tiiter ) {
-        size_t s = 0;
-        is_ >> s;
+//    template<typename Tiiter, typename Toiter>
+//    void persist_range( Tiiter ifirst, ) {
+//        size_t s = 0;
+//        is_ >> s;
 
-        for( size_t i = 0; i < s; ++i ) {
-            std::pair<Tkey, Tvalue> p;
-            persist(p);
-            v.emplace( std::move(p));
-        }
-    }
+//        for( size_t i = 0; i < s; ++i ) {
+//            std::pair<Tkey, Tvalue> p;
+//            persist(p);
+//            v.emplace( std::move(p));
+//        }
+//    }
 
 
     template<typename Tkey, typename Tvalue>
