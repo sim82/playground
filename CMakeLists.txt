@@ -101,6 +101,8 @@ add_executable( openhash openhash.cpp )
 
 add_executable( message_passing_3 message_passing_3.cpp mp3.cpp )
 
+add_executable( instrospect introspect.cpp )
+
 # target_link_libraries(game1 X11)
 
 # target_link_libraries( llvm_plf pthread ffi dl m LLVM-3.1)
