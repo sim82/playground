@@ -5,18 +5,13 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include <tuple>
+#include <numeric>
 
 using std::size_t;
 
 namespace intro
 {
-class CMemberCollector;
-
-class IIntrospectable
-{
-public:
-    virtual void intro( CMemberCollector & c ) = 0;
-};
 
 class ILayout
 {
@@ -25,6 +20,106 @@ public:
     virtual void printLayout(std::ostream &os ) = 0;
 
 };
+
+// inspired by http://cpplove.blogspot.de/2013/05/my-take-on-c-serialization-part-i.html
+    class CElementCollector
+    {
+        struct SEntry
+        {
+            std::type_index type_;
+            size_t offset_;
+        };
+
+    public:
+        template<typename T>
+        void addEntry( T & tref )
+        {
+            entries_.emplace_back(SEntry{typeid(T), getOffset(tref)});
+        }
+
+        //tem
+        void setBase( const void *ptr )
+        {
+            base_ = ptr;
+        }
+
+        void printElements( std::ostream & os )
+        {
+            os << "tuple of size " << size_ << "\n";
+            for( auto rit = entries_.begin(), reit = entries_.end(); rit != reit; ++rit )
+            {
+                os << " @" << rit->offset_ << ": " << rit->type_.name() << " \n";
+            }
+        }
+
+
+    private:
+        template<typename T>
+        size_t getOffset( T & tref )
+        {
+            size_t off = size_t((void*)&tref);
+            size_t baseOffs = size_t(base_);
+            assert( off >= baseOffs && off - baseOffs <= 1024 * 1024 );
+
+            return off - baseOffs;
+        }
+
+        std::vector<SEntry> entries_;
+        const void *base_{nullptr};
+        size_t size_{0};
+    };
+
+    template <int N> using int_ = std::integral_constant<size_t, N>;
+
+    template <class T>
+    struct SGetElementsHelper;
+
+    template <class TTuple>
+    inline void getTupleElements(CElementCollector &collector, const TTuple& obj, int_<0>) {
+        constexpr size_t idx = std::tuple_size<TTuple>::value-1;
+    //    std::vector<std::type_index> ret;
+        //ret.push_back(typeid(std::get<idx>(obj)));
+//        return ret;//get_size(std::get<idx>(obj));
+        collector.addEntry(std::get<idx>(obj));
+    }
+
+    template <class TTuple, size_t pos>
+    inline void getTupleElements(CElementCollector &collector, const TTuple& obj, int_<pos>) {
+
+        constexpr size_t idx = std::tuple_size<TTuple>::value-pos-1;
+        //size_t acc = 1;//get_size(std::get<idx>(obj));
+
+        getTupleElements(collector, obj, int_<pos-1>());
+//        ret.push_back(typeid(std::get<idx>(obj)));
+        collector.addEntry(std::get<idx>(obj));
+  //      return ret;
+    }
+
+
+    template <class ...T>
+    struct SGetElementsHelper<std::tuple<T...>> {
+        static CElementCollector value(const std::tuple<T...>& obj) {
+            CElementCollector collector;
+            collector.setBase(&obj);
+            getTupleElements(collector, obj, int_<sizeof...(T)-1>());
+            return collector;
+        }
+    };
+
+    template<typename ...T>
+    CElementCollector getTupleElements( std::tuple<T...> & tuple )
+    {
+        return SGetElementsHelper<std::tuple<T...>>::value(tuple);
+    }
+
+class CMemberCollector;
+
+class IIntrospectable
+{
+public:
+    virtual void intro( CMemberCollector & c ) = 0;
+};
+
 
 class CArrayLayout
         : public ILayout
@@ -95,6 +190,8 @@ private:
     std::type_index keyType_;
     std::type_index valueType_;
 };
+
+
 
 class CTraverser
 {
@@ -397,6 +494,8 @@ private:
     std::map<int, CTest2> f_;
 };
 
+
+
 int main()
 {
     //intro::CMemberCollector c;
@@ -407,5 +506,18 @@ int main()
     traverser.printTypes(std::cout);
 
     std::cout << "CTest1 size: " << sizeof(CTest1) << "\n";
+
+    using TTuple = std::tuple<int, int, size_t, std::tuple<int,int>>;
+
+    //std::vector<std::type_index> types = magick::get_size_helper<TTuple>::value(TTuple());
+    TTuple tup;
+    //std::pair<int, int> tup;
+    intro::CElementCollector collector = intro::getTupleElements(tup);
+    collector.printElements( std::cout );
+
+//    for( auto rit = types.rbegin(), reit = types.rend(); rit != reit; ++rit )
+//    {
+//        std::cout << rit->name() << "\n";
+//    }
 
 }
