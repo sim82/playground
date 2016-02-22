@@ -22,7 +22,8 @@ public:
 };
 
 // inspired by http://cpplove.blogspot.de/2013/05/my-take-on-c-serialization-part-i.html
-    class CElementCollector
+    class CTupleLayout
+            : public ILayout
     {
         struct SEntry
         {
@@ -43,7 +44,7 @@ public:
             base_ = ptr;
         }
 
-        void printElements( std::ostream & os )
+        void printLayout( std::ostream & os )
         {
             os << "tuple of size " << size_ << "\n";
             for( auto rit = entries_.begin(), reit = entries_.end(); rit != reit; ++rit )
@@ -71,11 +72,12 @@ public:
 
     template <int N> using int_ = std::integral_constant<size_t, N>;
 
-    template <class T>
+    template <typename T>
     struct SGetElementsHelper;
 
-    template <class TTuple>
-    inline void getTupleElements(CElementCollector &collector, const TTuple& obj, int_<0>) {
+    template <typename TTuple>
+    inline void getTupleElements(CTupleLayout &collector, const TTuple& obj, int_<0>)
+    {
         constexpr size_t idx = std::tuple_size<TTuple>::value-1;
     //    std::vector<std::type_index> ret;
         //ret.push_back(typeid(std::get<idx>(obj)));
@@ -83,8 +85,9 @@ public:
         collector.addEntry(std::get<idx>(obj));
     }
 
-    template <class TTuple, size_t pos>
-    inline void getTupleElements(CElementCollector &collector, const TTuple& obj, int_<pos>) {
+    template <typename TTuple, size_t pos>
+    inline void getTupleElements(CTupleLayout &collector, const TTuple& obj, int_<pos>)
+    {
 
         constexpr size_t idx = std::tuple_size<TTuple>::value-pos-1;
         //size_t acc = 1;//get_size(std::get<idx>(obj));
@@ -96,21 +99,38 @@ public:
     }
 
 
-    template <class ...T>
-    struct SGetElementsHelper<std::tuple<T...>> {
-        static CElementCollector value(const std::tuple<T...>& obj) {
-            CElementCollector collector;
-            collector.setBase(&obj);
-            getTupleElements(collector, obj, int_<sizeof...(T)-1>());
-            return collector;
+    template <typename ...T>
+    struct SGetElementsHelper<std::tuple<T...>>
+    {
+        static std::unique_ptr<CTupleLayout> value(const std::tuple<T...>& obj)
+        {
+            auto collector = std::make_unique<CTupleLayout>();
+
+            collector->setBase(&obj);
+            getTupleElements(*collector, obj, int_<sizeof...(T)-1>());
+            return std::move(collector);
         }
     };
 
-    template<typename ...T>
-    CElementCollector getTupleElements( std::tuple<T...> & tuple )
+    template <typename T1, typename T2>
+    struct SGetElementsHelper<std::pair<T1,T2>>
     {
-        return SGetElementsHelper<std::tuple<T...>>::value(tuple);
-    }
+        static std::unique_ptr<CTupleLayout> value(const std::pair<T1,T2>& obj)
+        {
+            auto collector = std::make_unique<CTupleLayout>();
+
+            collector->setBase(&obj);
+            collector->addEntry(obj.first);
+            collector->addEntry(obj.second);
+            return std::move(collector);
+        }
+    };
+
+//    template<typename ...T>
+//    CTupleLayout getTupleElements( std::tuple<T...> & tuple )
+//    {
+//        return SGetElementsHelper<std::tuple<T...>>::value(tuple);
+//    }
 
 class CMemberCollector;
 
@@ -126,6 +146,7 @@ class CArrayLayout
 {
 public:
     CArrayLayout( std::type_index type, size_t size, std::type_index innerType )
+
         : type_(type)
         , size_(size)
         , innerType_(innerType)
@@ -309,6 +330,25 @@ public:
 
     }
 
+    template<typename ...T>
+    void dispatchProbe( std::tuple<T...> & tuple )
+    {
+        auto const& tupleType = typeid(tuple);
+        if( collectors_.find(tupleType) == collectors_.end() )
+        {
+            collectors_.emplace(tupleType, SGetElementsHelper<std::tuple<T...>>::value(tuple));
+        }
+    }
+
+    template<typename T1, typename T2>
+    void dispatchProbe( std::pair<T1, T2> & tuple )
+    {
+        auto const& tupleType = typeid(tuple);
+        if( collectors_.find(tupleType) == collectors_.end() )
+        {
+            collectors_.emplace(tupleType, SGetElementsHelper<std::pair<T1,T2>>::value(tuple));
+        }
+    }
     void printTypes(std::ostream & os );
 
 private:
@@ -482,6 +522,7 @@ public:
         c.addMember(d_);
         c.addMember(e_);
         c.addMember(f_);
+        c.addMember(g_);
     }
 
 private:
@@ -492,6 +533,9 @@ private:
     std::array<std::vector<CTest1>, 4> e_;
 
     std::map<int, CTest2> f_;
+
+    using TTuple = std::tuple<int, int, size_t, std::tuple<int,int>, CTest3>;
+    TTuple g_;
 };
 
 
@@ -507,13 +551,13 @@ int main()
 
     std::cout << "CTest1 size: " << sizeof(CTest1) << "\n";
 
-    using TTuple = std::tuple<int, int, size_t, std::tuple<int,int>>;
+    //using TTuple = std::tuple<int, int, size_t, std::tuple<int,int>>;
 
     //std::vector<std::type_index> types = magick::get_size_helper<TTuple>::value(TTuple());
-    TTuple tup;
-    //std::pair<int, int> tup;
-    intro::CElementCollector collector = intro::getTupleElements(tup);
-    collector.printElements( std::cout );
+//    TTuple tup;
+//    //std::pair<int, int> tup;
+//    intro::CTupleLayout collector = intro::getTupleElements(tup);
+//    collector.printElements( std::cout );
 
 //    for( auto rit = types.rbegin(), reit = types.rend(); rit != reit; ++rit )
 //    {
