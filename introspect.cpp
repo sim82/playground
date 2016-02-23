@@ -2,11 +2,20 @@
 
 #include <cassert>
 #include <iostream>
+#include <iomanip>
 #include <map>
 #include <memory>
 #include <vector>
 #include <tuple>
 #include <numeric>
+#include <functional>
+
+struct SVec3
+{
+    float x;
+    float y;
+    float z;
+};
 
 using std::size_t;
 
@@ -16,9 +25,20 @@ namespace intro
 class ILayout
 {
 public:
+    class IVisitor
+    {
+    public:
+        virtual ~IVisitor() {}
+        virtual void acceptComplex(std::type_index, size_t, void *) = 0;
+        virtual void acceptArithmetic(std::type_index, void *) = 0;
+    };
+
     virtual ~ILayout() {};
     virtual void printLayout(std::ostream &os ) = 0;
 
+    //using TVisitor = std::function<void(std::type_index, size_t, void *)>;
+    using TVisitor = IVisitor;
+    virtual void reinterpret( void *, TVisitor & visitor ) = 0;
 };
 
 // inspired by http://cpplove.blogspot.de/2013/05/my-take-on-c-serialization-part-i.html
@@ -53,6 +73,14 @@ public:
             }
         }
 
+        void reinterpret( void *ptr, ILayout::TVisitor & visitor ) override
+        {
+            size_t baseOffs = size_t(ptr);
+            for( auto &entry : entries_ )
+            {
+                visitor.acceptComplex(entry.type_, 1, reinterpret_cast<void*>(baseOffs + entry.offset_));
+            }
+        }
 
     private:
         template<typename T>
@@ -70,61 +98,7 @@ public:
         size_t size_{0};
     };
 
-    template <int N> using int_ = std::integral_constant<size_t, N>;
 
-    template <typename T>
-    struct SGetElementsHelper;
-
-    template <typename TTuple>
-    inline void getTupleElements(CTupleLayout &collector, const TTuple& obj, int_<0>)
-    {
-        constexpr size_t idx = std::tuple_size<TTuple>::value-1;
-    //    std::vector<std::type_index> ret;
-        //ret.push_back(typeid(std::get<idx>(obj)));
-//        return ret;//get_size(std::get<idx>(obj));
-        collector.addEntry(std::get<idx>(obj));
-    }
-
-    template <typename TTuple, size_t pos>
-    inline void getTupleElements(CTupleLayout &collector, const TTuple& obj, int_<pos>)
-    {
-
-        constexpr size_t idx = std::tuple_size<TTuple>::value-pos-1;
-        //size_t acc = 1;//get_size(std::get<idx>(obj));
-
-        getTupleElements(collector, obj, int_<pos-1>());
-//        ret.push_back(typeid(std::get<idx>(obj)));
-        collector.addEntry(std::get<idx>(obj));
-  //      return ret;
-    }
-
-
-    template <typename ...T>
-    struct SGetElementsHelper<std::tuple<T...>>
-    {
-        static std::unique_ptr<CTupleLayout> value(const std::tuple<T...>& obj)
-        {
-            auto collector = std::make_unique<CTupleLayout>();
-
-            collector->setBase(&obj);
-            getTupleElements(*collector, obj, int_<sizeof...(T)-1>());
-            return std::move(collector);
-        }
-    };
-
-    template <typename T1, typename T2>
-    struct SGetElementsHelper<std::pair<T1,T2>>
-    {
-        static std::unique_ptr<CTupleLayout> value(const std::pair<T1,T2>& obj)
-        {
-            auto collector = std::make_unique<CTupleLayout>();
-
-            collector->setBase(&obj);
-            collector->addEntry(obj.first);
-            collector->addEntry(obj.second);
-            return std::move(collector);
-        }
-    };
 
 //    template<typename ...T>
 //    CTupleLayout getTupleElements( std::tuple<T...> & tuple )
@@ -137,7 +111,7 @@ class CMemberCollector;
 class IIntrospectable
 {
 public:
-    virtual void intro( CMemberCollector & c ) = 0;
+    virtual void intro( CMemberCollector & c ) const = 0;
 };
 
 
@@ -157,6 +131,10 @@ public:
         os << " " << size_ << " of " << innerType_.name() <<"\n";
     }
 
+    void reinterpret( void *ptr, ILayout::TVisitor & visitor ) override
+    {
+        visitor.acceptComplex(innerType_, size_, ptr);
+    }
 //    template<typename T, size_t Size>
 //    void intro( std::array<T, Size> & tref )
 //    {
@@ -185,6 +163,12 @@ public:
         os << "dynamic iteratable type: " << type_.name() << "\n";
         os << " of " << innerType_.name() << "\n";
     }
+
+    void reinterpret( void *ptr, ILayout::TVisitor & visitor ) override
+    {
+        // TODO: find way to solve dynamic size problem
+     //   visitor(innerType_, size, ptr);
+    }
 private:
     std::type_index type_;
     std::type_index innerType_;
@@ -206,18 +190,103 @@ public:
         os << "dynamic map type: " << type_.name() << "\n";
         os << " " << keyType_.name() << " -> " << valueType_.name() << " \n";
     }
+    void reinterpret( void *ptr, ILayout::TVisitor & visitor ) override
+    {
+        // TODO: find way to solve dynamic size problem
+    }
 private:
     std::type_index type_;
     std::type_index keyType_;
     std::type_index valueType_;
 };
 
+class CArithmetic
+        : public ILayout
+{
+    // ILayout interface
+public:
+    CArithmetic(std::type_index type)
+        : type_(type)
+    {}
 
+    void printLayout(std::ostream &os)
+    {
+        os << "arithmetic type: " << type_.name() << "\n";
+    }
+
+    void reinterpret(void *ptr, TVisitor &visitor)
+    {
+        visitor.acceptArithmetic(type_, ptr);
+    }
+
+private:
+    std::type_index type_;
+};
 
 class CTraverser
 {
+    template <int N> using int_ = std::integral_constant<size_t, N>;
+
+    template <typename T>
+    struct SGetElementsHelper;
+
+    template <typename TTuple>
+    inline void getTupleElements(CTupleLayout &collector, const TTuple& obj, int_<0>)
+    {
+        constexpr size_t idx = std::tuple_size<TTuple>::value-1;
+    //    std::vector<std::type_index> ret;
+        //ret.push_back(typeid(std::get<idx>(obj)));
+//        return ret;//get_size(std::get<idx>(obj));
+        collector.addEntry(std::get<idx>(obj));
+        dispatchProbe(std::get<idx>(obj));
+    }
+
+    template <typename TTuple, size_t pos>
+    inline void getTupleElements(CTupleLayout &collector, const TTuple& obj, int_<pos>)
+    {
+
+        constexpr size_t idx = std::tuple_size<TTuple>::value-pos-1;
+        //size_t acc = 1;//get_size(std::get<idx>(obj));
+
+        getTupleElements(collector, obj, int_<pos-1>());
+//        ret.push_back(typeid(std::get<idx>(obj)));
+        collector.addEntry(std::get<idx>(obj));
+        dispatchProbe(std::get<idx>(obj));
+  //      return ret;
+    }
+
+
+    template <typename ...T>
+    struct SGetElementsHelper<std::tuple<T...>>
+    {
+        static std::unique_ptr<CTupleLayout> value(CTraverser &traverser, const std::tuple<T...>& obj)
+        {
+            auto collector = std::make_unique<CTupleLayout>();
+
+            collector->setBase(&obj);
+            traverser.getTupleElements(*collector, obj, int_<sizeof...(T)-1>());
+            return std::move(collector);
+        }
+    };
+
+    template <typename T1, typename T2>
+    struct SGetElementsHelper<std::pair<T1,T2>>
+    {
+        static std::unique_ptr<CTupleLayout> value(CTraverser &traverser, const std::pair<T1,T2>& obj)
+        {
+            auto collector = std::make_unique<CTupleLayout>();
+
+            collector->setBase(&obj);
+            collector->addEntry(obj.first);
+            collector->addEntry(obj.second);
+
+            traverser.dispatchProbe(obj.first);
+            traverser.dispatchProbe(obj.second);
+            return std::move(collector);
+        }
+    };
 public:
-    bool probe( IIntrospectable & intro );
+    bool probe( IIntrospectable const& intro );
 
     bool probeArray( std::type_index arrayType, std::type_index type, size_t size )
     {
@@ -249,18 +318,23 @@ public:
     }
 
     template<typename T>
-    typename std::enable_if<std::is_base_of<IIntrospectable,T>::value, bool>::type dispatchProbe( T & tref )
+    typename std::enable_if<std::is_base_of<IIntrospectable,T>::value, bool>::type dispatchProbe( T const& tref )
     {
         return probe(tref);
     }
 
     template<typename T>
-    typename std::enable_if<std::is_arithmetic<T>::value>::type dispatchProbe( T & tref )
+    typename std::enable_if<std::is_arithmetic<T>::value>::type dispatchProbe( T const& tref )
     {
+        auto it = collectors_.find(typeid(T));
+        if( it == collectors_.end() )
+        {
+            collectors_.emplace(typeid(T), std::make_unique<CArithmetic>(typeid(T)));
+        }
     }
 
     template<typename T, size_t Size>
-    void dispatchProbe( std::array<T,Size> & tref )
+    void dispatchProbe( std::array<T,Size> const& tref )
     {
         if( !probeArray(typeid(tref), typeid(T), Size) )
         {
@@ -284,7 +358,7 @@ public:
 
 
     template<typename T>
-    void dispatchProbe( std::vector<T> & tref )
+    void dispatchProbe( std::vector<T> const& tref )
     {
         if( !probeDynamicIteratable(typeid(tref), typeid(T)) )
         {
@@ -306,7 +380,7 @@ public:
 
 
     template<typename TKey, typename TValue>
-    void dispatchProbe( std::map<TKey, TValue> & tref )
+    void dispatchProbe( std::map<TKey, TValue> const& tref )
     {
         if( !probeDynamicMap(typeid(tref), typeid(TKey), typeid(TValue)) )
         {
@@ -331,25 +405,46 @@ public:
     }
 
     template<typename ...T>
-    void dispatchProbe( std::tuple<T...> & tuple )
+    void dispatchProbe( std::tuple<T...> const& tuple )
     {
         auto const& tupleType = typeid(tuple);
         if( collectors_.find(tupleType) == collectors_.end() )
         {
-            collectors_.emplace(tupleType, SGetElementsHelper<std::tuple<T...>>::value(tuple));
+            collectors_.emplace(tupleType, SGetElementsHelper<std::tuple<T...>>::value(*this, tuple));
         }
     }
 
     template<typename T1, typename T2>
-    void dispatchProbe( std::pair<T1, T2> & tuple )
+    void dispatchProbe( std::pair<T1, T2> const& tuple )
     {
         auto const& tupleType = typeid(tuple);
         if( collectors_.find(tupleType) == collectors_.end() )
         {
-            collectors_.emplace(tupleType, SGetElementsHelper<std::pair<T1,T2>>::value(tuple));
+            collectors_.emplace(tupleType, SGetElementsHelper<std::pair<T1,T2>>::value(*this, tuple));
         }
     }
+
+    void probeForeignInternal(std::type_index type, void const*ptr , std::function<void(CMemberCollector &)> f);
+
+    template<typename T>
+    void probeForeign( T const& v, std::function<void(CMemberCollector & memberCollector)> f)
+    {
+        auto const& type = typeid(v);
+        probeForeignInternal(type, &v, f);
+    }
+
     void printTypes(std::ostream & os );
+
+    ILayout &getLayout( std::type_index type )
+    {
+        auto it = collectors_.find(type);
+        if( it == collectors_.end() )
+        {
+            throw std::runtime_error( std::string("no layout for type: ") + type.name() );
+        }
+
+        return *it->second;
+    }
 
 private:
 
@@ -422,6 +517,14 @@ public:
         }
     }
 
+    void reinterpret( void *ptr, ILayout::TVisitor & visitor ) override
+    {
+        auto const baseOffs = size_t(ptr);
+        for( auto & p : members_ )
+        {
+            visitor.acceptComplex(p.second.type_, 1, reinterpret_cast<void*>(baseOffs + p.second.offset_));
+        }
+    }
 private:
     template<typename T>
     inline size_t calcOffset( T & tref )
@@ -439,13 +542,13 @@ private:
 
     std::map<size_t, SEntry> members_;
     std::type_index type_{typeid(nullptr)};
-    void *basePtr_{nullptr};
+    void const* basePtr_{nullptr};
 
     CTraverser &traverser_;
 
 };
 
-bool CTraverser::probe(IIntrospectable &intro)
+bool CTraverser::probe(IIntrospectable const& intro)
 {
     std::type_index type = typeid(intro);
 
@@ -459,6 +562,18 @@ bool CTraverser::probe(IIntrospectable &intro)
         return true;
     }
     return false;
+}
+
+void CTraverser::probeForeignInternal(std::type_index type, void const* ptr, std::function<void(CMemberCollector &)> f)
+{
+    if( collectors_.find(type) != collectors_.end() )
+    {
+        return;
+    }
+    auto c = std::make_unique<CMemberCollector>(*this);
+    c->setBase(ptr);
+    f(*c);
+    collectors_.emplace(type, std::move(c));
 }
 
 void CTraverser::printTypes(std::ostream &os)
@@ -478,7 +593,7 @@ class CTest2
         : public intro::IIntrospectable
 {
 public:
-    void intro( intro::CMemberCollector & c )
+    void intro( intro::CMemberCollector & c ) const
     {
         c.addMember(a_);
         c.addMember(b_);
@@ -494,7 +609,7 @@ class CTest3
         : public intro::IIntrospectable
 {
 public:
-    void intro( intro::CMemberCollector & c )
+    void intro( intro::CMemberCollector & c ) const
     {
         c.addMember(a_);
         c.addMember(b_);
@@ -514,7 +629,7 @@ class CTest1
         : public intro::IIntrospectable
 {
 public:
-    void intro( intro::CMemberCollector & c )
+    void intro( intro::CMemberCollector & c ) const
     {
         c.addMember(a_);
         c.addMember(b_);
@@ -526,7 +641,7 @@ public:
     }
 
 private:
-    int a_;
+    int a_{666};
     std::array<int, 7> b_;
     CTest2 c_;
     std::array<CTest3, 4> d_;
@@ -538,18 +653,139 @@ private:
     TTuple g_;
 };
 
+class CArithmeticAdapter
+        : public intro::ILayout::IVisitor
+{
+public:
+    CArithmeticAdapter()
+    {
+#define ADD_TYPE(x) handlers_.emplace(typeid(x), [this](void *ptr){this->accept(*reinterpret_cast<x*>(ptr));})
+        ADD_TYPE(bool);
+        ADD_TYPE(int);
+        ADD_TYPE(float);
+        ADD_TYPE(size_t);
+#undef ADD_TYPE
 
+    }
+
+    virtual void accept( bool & v ) = 0;
+    virtual void accept( int & v ) = 0;
+    virtual void accept( float & v ) = 0;
+    virtual void accept( size_t & v ) = 0;
+
+    void acceptArithmetic(std::type_index type, void *ptr) override
+    {
+        auto it = handlers_.find(type);
+        if( it == handlers_.end() )
+        {
+            throw std::runtime_error( std::string( "unhandled type: ") + type.name() );
+        }
+        it->second(ptr);
+
+    }
+private:
+    std::map<std::type_index, std::function<void(void*)>> handlers_;
+};
+
+class CTestVisitor
+        : public CArithmeticAdapter
+{
+    // IVisitor interface
+public:
+    CTestVisitor( intro::CTraverser &traverser, void *base )
+        : traverser_(traverser)
+        , base_(base)
+    {}
+
+    void acceptComplex(std::type_index type, size_t size, void *ptr) override
+    {
+        indent(std::cout);
+        std::cout << "complex: " << size << " of " << type.name() << " @ " << size_t(ptr) - size_t(base_) << "\n";
+        ++indent_;
+        traverser_.getLayout(type).reinterpret(ptr, *this);
+        --indent_;
+    }
+
+//    void acceptArithmetic(std::type_index type, void *ptr)
+//    {
+//        indent(std::cout);
+//        std::cout << "arithmetic type " << type.name() << " @ " << size_t(ptr) - size_t(base_) << "\n";
+//    }
+
+public:
+    void accept(bool &v)
+    {
+        indent(std::cout);
+        std::cout << "bool " << (v ? "true" : "false") << "\n";
+    }
+
+    void accept(int &v)
+    {
+        indent(std::cout);
+        std::cout << "int " << v << "\n";
+    }
+
+    void accept(float &v)
+    {
+        indent(std::cout);
+        std::cout << "float " << v << "\n";
+    }
+
+    void accept(size_t &v)
+    {
+        indent(std::cout);
+        std::cout << "size_t " << v << "\n";
+    }
+
+    void indent( std::ostream &os )
+    {
+        for( size_t i = 0; i < indent_; ++i )
+        {
+            os << " ";
+        }
+    }
+
+private:
+    intro::CTraverser &traverser_;
+    void *base_;
+    size_t indent_{0};
+
+    // CArithmeticAdapter interface
+
+};
 
 int main()
 {
     //intro::CMemberCollector c;
     intro::CTraverser traverser;
 
+    {
+        SVec3 v;
+        traverser.probeForeign<SVec3>(v, [&v]( intro::CMemberCollector & c)
+        {
+            c.addMember(v.x);
+            c.addMember(v.y);
+            c.addMember(v.z);
+        });
+    }
+
+    traverser.printTypes(std::cout);
+
+
     CTest1 t;
     traverser.probe(t);
     traverser.printTypes(std::cout);
 
     std::cout << "CTest1 size: " << sizeof(CTest1) << "\n";
+
+//    auto visitor = [&](std::type_index type, size_t num, void *ptr )
+//    {
+//        traverser.getLayout(type).reinterpret(ptr, visitor);
+//    };
+
+    CTestVisitor v(traverser, &t);
+
+    traverser.getLayout(typeid(t)).reinterpret(&t, v);
 
     //using TTuple = std::tuple<int, int, size_t, std::tuple<int,int>>;
 
