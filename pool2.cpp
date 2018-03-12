@@ -20,6 +20,7 @@
 #include <memory>
 #include <condition_variable>
 #include <mutex>
+#include <numeric>
 #include <cassert>
 
 

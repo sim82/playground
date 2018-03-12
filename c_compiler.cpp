@@ -25,6 +25,7 @@
 #include <memory>
 #include <unordered_set>
 #include <stdexcept>
+#include <functional>
 
 using std::shared_ptr;
 

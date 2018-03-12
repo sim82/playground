@@ -126,12 +126,12 @@ int main()
         std::cout << "lambda handler " << m.a << " " << m.blub << "\n";
     });
 
-    q.call<msg_type1>({1, "blub"});
+    q.call(msg_type1{1, "blub"});
     q.dispatch_pop();
 
     q.register_function(on_msg_type2);
 
-    q.call<msg_type2>({2, "blub2"}, q, [](size_t token, const msg_type2_ret &m) {
+    q.call(msg_type2{2, "blub2"}, q, [](size_t token, const msg_type2_ret &m) {
         std::cout << "lambda return handler " << m.a << std::endl;
     });
 

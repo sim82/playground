@@ -17,6 +17,8 @@
 #include <bitset>
 #include <iostream>
 #include <cassert>
+#include <cmath>
+
 #include <boost/dynamic_bitset.hpp>
 
 float randf() {
