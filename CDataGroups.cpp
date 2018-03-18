@@ -294,6 +294,11 @@ void CDataGroups::addBindingInternal(SHandle src, SHandle target, std::unique_pt
     binding.release();
 }
 
+bool CDataGroups::isTypeInternal(const SHandle &handle, std::type_index type)
+{
+    return types_.at(handle.getType()).type == type;
+}
+
 void *CDataGroups::getStorage(const SHandle &handle)
 {
     auto &type = types_.at(handle.getType());
@@ -302,28 +307,21 @@ void *CDataGroups::getStorage(const SHandle &handle)
 
 void CDataGroups::updateBindings(const SHandle &handle)
 {
-    tmpDeque_.clear();
+//    tmpDeque_.clear();
     tmpVec_.clear();
 
     auto & queue = tmpVec_;
     size_t qReadPos = 0;
     queue.push_back(handle);
 
-//    std::deque<SHandle> &q = tmpDeque_;
-//    q.push_back(handle);
-
-//    using TCycleCheckSet = std::unordered_set<SHandle, SHandleHash /*, SHandleEqual*/>;
-//    std::unique_ptr<TCycleCheckSet> cycleCheckSet;
-
-//    std::vector<SHandle> &handles = tmpVec_;
-
     size_t numBindings               = 0;
     size_t const cycleCheckThreshold = 200000;
+
+    std::vector<SHandle> sorted;
 
     while (qReadPos != queue.size())
     {
         SHandle const &f = queue[qReadPos];
-//        handles.emplace_back(f);
 
         auto &type       = types_.at(f.getType());
         auto const range = type.bindings->rangeForSource(f.getIndex());
@@ -342,7 +340,7 @@ void CDataGroups::updateBindings(const SHandle &handle)
             ++numBindings;
             if (numBindings >= cycleCheckThreshold)
             {
-                auto sorted = queue;
+                sorted = queue;
 
                 std::sort(sorted.begin(), sorted.end());
                 if( std::adjacent_find(sorted.begin(), sorted.end()) != sorted.end())
@@ -353,10 +351,8 @@ void CDataGroups::updateBindings(const SHandle &handle)
                 numBindings = 0;
             }
 
-//            q.push_back(target);
             queue.push_back(target);
         }
-//        q.pop_front();
         ++qReadPos;
     }
 

@@ -107,12 +107,11 @@ struct SHandle
     {
     }
 
-    SHandle(SHandle const&) = default;
-    SHandle& operator=(SHandle const&) = default;
+    SHandle(SHandle const &) = default;
+    SHandle &operator=(SHandle const &) = default;
 
     SHandle(SHandle &&) = default;
-    SHandle& operator=(SHandle &&) = default;
-
+    SHandle &operator=(SHandle &&) = default;
 
     inline uint32_t getType() const
     {
@@ -449,14 +448,19 @@ public:
         updateBindings(handle);
     }
 
+    template <typename T>
+    inline bool isType(SHandle const &handle)
+    {
+        return handle != NullHandle && isTypeInternal(handle, typeid(T));
+    }
+
 private:
     void addBindingInternal(SHandle src, SHandle target, std::unique_ptr<CAbstractBinding> binding);
+    bool isTypeInternal(SHandle const &handle, std::type_index type);
 
     TTypes types_;
 
     std::vector<SHandle> tmpVec_;
-    std::deque<SHandle> tmpDeque_;
-    //    CBindingFactory bindingFactory_;
 };
 
 template <typename T>
@@ -555,18 +559,130 @@ private:
 class CVariant
 {
 public:
+    CVariant() = default;
+
     template <typename T>
     explicit CVariant(T const &v)
-        : handle_(CDataGroups::getSingleton().alloc<T>)
+        : handle_(CDataGroups::getSingleton().alloc<T>())
     {
+        auto &groups = CDataGroups::getSingleton();
+        groups.set<T>(handle_, v);
     }
 
     template <typename T>
     explicit CVariant(T &&v)
-        : handle_(CDataGroups::getSingleton().alloc<T>)
+        : handle_(CDataGroups::getSingleton().alloc<T>())
     {
+        auto &groups = CDataGroups::getSingleton();
+        groups.set<T>(handle_, std::move(v));
     }
 
+    CVariant(CVariant const &other)
+        : handle_(other.handle_)
+    {
+        auto &groups = CDataGroups::getSingleton();
+        groups.incRefcount(handle_);
+    }
+
+    CVariant &operator=(CVariant const &other)
+    {
+        auto &groups = CDataGroups::getSingleton();
+
+        if (handle_ != NullHandle)
+        {
+            groups.decRefcount(handle_);
+        }
+
+        handle_ = other.handle_;
+        groups.incRefcount(handle_);
+
+        return *this;
+    }
+
+    CVariant(CVariant &&other)
+        : handle_(other.handle_)
+    {
+        other.handle_ = NullHandle;
+    }
+
+    CVariant &operator=(CVariant &&other)
+    {
+        if (handle_ != NullHandle)
+        {
+            auto &groups = CDataGroups::getSingleton();
+            groups.decRefcount(handle_);
+        }
+
+        handle_       = other.handle_;
+        other.handle_ = NullHandle;
+        return *this;
+    }
+
+    template <typename T>
+    bool isA()
+    {
+        auto &groups = CDataGroups::getSingleton();
+
+        return groups.isType<T>(handle_);
+    }
+
+    template <typename T>
+    std::pair<T, bool> get()
+    {
+        auto &groups = CDataGroups::getSingleton();
+
+        if (!groups.isType<T>(handle_))
+        {
+            return {T(), false};
+        }
+        return {groups.get<T>(handle_), true};
+    }
+
+    template <typename T>
+    bool set(T const &v)
+    {
+        auto &groups = CDataGroups::getSingleton();
+
+        if (!groups.isType<T>(handle_))
+        {
+            return false;
+        }
+        groups.set<T>(handle_, v);
+        return true;
+    }
+
+    template <typename T>
+    bool set(T &&v)
+    {
+        auto &groups = CDataGroups::getSingleton();
+
+        if (!groups.isType<T>(handle_))
+        {
+            return false;
+        }
+        groups.set<T>(handle_, std::move(v));
+        return true;
+    }
+
+    template <typename T>
+    CVariant &operator=(T const &t)
+    {
+        set(t);
+        return *this;
+    }
+
+    template <typename T>
+    CVariant &operator=(T && t)
+    {
+        set(std::move(t));
+        return *this;
+    }
+
+    template<typename T>
+    explicit operator T()
+    {
+        return get<T>().first;
+    }
 private:
     SHandle handle_;
 };

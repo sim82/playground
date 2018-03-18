@@ -130,6 +130,7 @@ int main()
     groups.addType<glm::vec3>();
     groups.addType<std::string>();
     groups.addType<float>();
+    groups.addType<double>();
 
     {
         auto v  = allocValue<int>(555);
@@ -169,7 +170,7 @@ int main()
 
 //    groups.addBinding<CBindSameType<int>>(src, v);
 
-    for (size_t i = 0; i < 1000; ++i)
+    for (size_t i = 0; i < 10; ++i)
     {
         v.set(int(666 + i));
         std::cout << "src: " << groups.get<int>(src) << "\n";
@@ -196,4 +197,8 @@ int main()
         std::cout << out.get() << "\n";
     }
 
+    CVariant variant(100.0);
+    variant.isA<int>();
+
+    std::cout << "variant " << double(variant) << "\n";
 }
