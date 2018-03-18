@@ -305,22 +305,25 @@ void CDataGroups::updateBindings(const SHandle &handle)
     tmpDeque_.clear();
     tmpVec_.clear();
 
-    std::deque<SHandle> &q = tmpDeque_;
-    q.push_back(handle);
+    auto & queue = tmpVec_;
+    size_t qReadPos = 0;
+    queue.push_back(handle);
+
+//    std::deque<SHandle> &q = tmpDeque_;
+//    q.push_back(handle);
 
 //    using TCycleCheckSet = std::unordered_set<SHandle, SHandleHash /*, SHandleEqual*/>;
 //    std::unique_ptr<TCycleCheckSet> cycleCheckSet;
 
-    std::vector<SHandle> &handles = tmpVec_;
+//    std::vector<SHandle> &handles = tmpVec_;
 
     size_t numBindings               = 0;
     size_t const cycleCheckThreshold = 200000;
 
-//    size_t qReadPos = 0
-    while (!q.empty())
+    while (qReadPos != queue.size())
     {
-        SHandle const &f = q.front();
-        handles.emplace_back(f);
+        SHandle const &f = queue[qReadPos];
+//        handles.emplace_back(f);
 
         auto &type       = types_.at(f.getType());
         auto const range = type.bindings->rangeForSource(f.getIndex());
@@ -339,8 +342,10 @@ void CDataGroups::updateBindings(const SHandle &handle)
             ++numBindings;
             if (numBindings >= cycleCheckThreshold)
             {
-                std::sort(handles.begin(), handles.end());
-                if( std::adjacent_find(handles.begin(), handles.end()) != handles.end())
+                auto sorted = queue;
+
+                std::sort(sorted.begin(), sorted.end());
+                if( std::adjacent_find(sorted.begin(), sorted.end()) != sorted.end())
                 {
                     std::cout << "cycle\n";
                     return;
@@ -348,12 +353,14 @@ void CDataGroups::updateBindings(const SHandle &handle)
                 numBindings = 0;
             }
 
-            q.push_back(target);
+//            q.push_back(target);
+            queue.push_back(target);
         }
-        q.pop_front();
+//        q.pop_front();
+        ++qReadPos;
     }
 
-    for (auto const &h : handles)
+    for (auto const &h : queue)
     {
         auto &type = types_.at(h.getType());
 
