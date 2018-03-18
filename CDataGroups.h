@@ -12,7 +12,6 @@
  *  for more details.
  */
 
-
 #pragma once
 
 #include <boost/intrusive/list.hpp>
@@ -46,11 +45,35 @@ public:
     virtual size_t getCapacity()           = 0;
     virtual uint32_t getRefcount(size_t i) = 0;
 };
-
+#if 0
 struct SHandle
 {
-    uint32_t type_;
-    uint32_t index_;
+    SHandle(uint32_t type, uint32_t index)
+        : type_(type)
+        , index_(index)
+    {
+    }
+
+    SHandle()
+        : SHandle(uint32_t(-1), uint32_t(-1))
+    {
+    }
+
+    SHandle(SHandle const&) = default;
+    SHandle& operator=(SHandle const&) = default;
+
+    SHandle(SHandle &&) = default;
+    SHandle& operator=(SHandle &&) = default;
+
+
+    inline uint32_t getType() const
+    {
+        return type_;
+    }
+    inline uint32_t getIndex() const
+    {
+        return index_;
+    }
 
     inline bool operator==(SHandle const &other) const
     {
@@ -61,11 +84,68 @@ struct SHandle
     {
         return !(operator==(other));
     }
+    inline bool operator<(SHandle const &other) const
+    {
+        return type_ < other.type_ || (!(other.type_ < type_) && index_ < other.index_);
+    }
+
+private:
+    uint32_t type_;
+    uint32_t index_;
 };
+#else
+struct SHandle
+{
+    SHandle(uint32_t type, uint32_t index)
+        : type_(type)
+        , index_(index)
+    {
+    }
+
+    SHandle()
+        : SHandle(uint32_t(-1), uint32_t(-1))
+    {
+    }
+
+    SHandle(SHandle const&) = default;
+    SHandle& operator=(SHandle const&) = default;
+
+    SHandle(SHandle &&) = default;
+    SHandle& operator=(SHandle &&) = default;
+
+
+    inline uint32_t getType() const
+    {
+        return type_;
+    }
+    inline uint32_t getIndex() const
+    {
+        return index_;
+    }
+
+    inline bool operator==(SHandle const &other) const
+    {
+        return type_ == other.type_ && index_ == other.index_;
+    }
+
+    inline bool operator!=(SHandle const &other) const
+    {
+        return !(operator==(other));
+    }
+    inline bool operator<(SHandle const &other) const
+    {
+        return type_ < other.type_ || (!(other.type_ < type_) && index_ < other.index_);
+    }
+
+private:
+    uint32_t type_ : 8;
+    uint32_t index_ : 24;
+};
+#endif
 
 inline std::ostream &operator<<(std::ostream &os, SHandle const &h)
 {
-    os << "handle(" << h.type_ << ":" << h.index_ << ")";
+    os << "handle(" << h.getType() << ":" << h.getIndex() << ")";
     return os;
 }
 
@@ -76,7 +156,7 @@ struct SHandleHash
     size_t operator()(SHandle const &h) const
     {
         const std::hash<uint32_t> hash;
-        return hash(h.type_) + hash(h.index_);
+        return hash(h.getType()) + hash(h.getIndex());
     }
 };
 
@@ -84,28 +164,31 @@ struct SHandleHash
 //{
 //    bool operator()(SHandle const &h1, SHandle const &h2) const
 //    {
-//        return h1.type_ == h2.type_ && h1.index_ == h2.index_;
+//        return h1.getType() == h2.getType() && h1.index_ == h2.index_;
 //    }
 //};
 
-//class IBinding
+// class IBinding
 //{
-//public:
+// public:
 //    virtual ~IBinding()
 //    {
 //    }
 //    virtual void apply(void const *src, void *target) = 0;
 
-//private:
+// private:
 //};
-
 
 using TListMemberHook = boost::intrusive::list_member_hook<boost::intrusive::link_mode<boost::intrusive::auto_unlink>>;
 
 class CAbstractBinding /*: public IBinding*/
 {
 public:
-    virtual ~CAbstractBinding() {}
+    using TTypePair = std::pair<std::type_index, std::type_index>;
+
+    virtual ~CAbstractBinding()
+    {
+    }
 
     TListMemberHook fromHook_;
     TListMemberHook toHook_;
@@ -120,13 +203,63 @@ public:
     }
 
     virtual void apply(void const *src, void *target) = 0;
+    virtual TTypePair getTypes()                      = 0;
 
 private:
     SHandle target_;
 };
 
+template <typename TInput, typename TOutput>
+class CAbstractTypedBinding : public CAbstractBinding
+{
+public:
+    TTypePair getTypes() override
+    {
+        return {typeid(TInput), typeid(TOutput)};
+    }
+};
+
 using CAbstractBindingPtr = std::unique_ptr<CAbstractBinding>;
 
+class CAbstractDataHandler
+{
+public:
+    TListMemberHook hook_;
+
+    virtual ~CAbstractDataHandler()
+    {
+    }
+    virtual void dataChanged()        = 0;
+    virtual std::type_index getType() = 0;
+};
+
+template <typename T>
+class CAbstractTypedDataHandler : public CAbstractDataHandler
+{
+public:
+    std::type_index getType() override
+    {
+        return typeid(T);
+    }
+};
+
+template <typename THandler, typename T>
+class CDataHandlerCallFunctor : public CAbstractTypedDataHandler<T>
+{
+public:
+    CDataHandlerCallFunctor(THandler f)
+        : f_(std::move(f))
+    {
+    }
+
+    void dataChanged() override
+    {
+        f_();
+    }
+
+private:
+    THandler f_;
+};
 
 class ITypeSupport
 {
@@ -150,7 +283,8 @@ class CTypeSupportDefault : public ITypeSupport
 public:
     void construct(void *storage) override
     {
-        new (storage) T();
+        auto *v = new (storage) T();
+        (void)v; // debug
     }
 
     void destruct(void *storage) override
@@ -184,11 +318,27 @@ public:
     }
 };
 
-//using IBindingPtr         = std::unique_ptr<IBinding>;
+// using IBindingPtr         = std::unique_ptr<IBinding>;
 
 class CBindings;
 
-class CDataGroups
+// class CBindingFactory final
+//{
+// public:
+//    template<typename T, typename = std::enable_if_t<std::is_base_of<CAbstractBinding, T>::value, void>>
+//    std::shared_ptr<CAbstractBinding> getBinding()
+//    {
+//        auto binding = getBindingInternal(typeid (T), {});
+//        return binding ? binding : getBindingInternal(typeid(T), std::make_shared<T>());
+//    }
+// private:
+//    std::shared_ptr<CAbstractBinding> getBindingInternal(std::type_index type, std::shared_ptr<CAbstractBinding>
+//    init);
+
+//    std::map<std::type_index, std::shared_ptr<CAbstractBinding>> bindings_;
+//};
+
+class CDataGroups final
 {
     struct SType
     {
@@ -213,7 +363,7 @@ public:
     {
 #ifndef NDEBUG
         std::type_index const typeId = typeid(T);
-        auto it = findType(typeId);
+        auto it                      = findType(typeId);
         assert(it == types_.end());
 #endif
 
@@ -226,15 +376,28 @@ public:
     SHandle alloc()
     {
         std::type_index const typeId = typeid(T);
-        auto it = findType(typeId);
+        auto it                      = findType(typeId);
         assert(it != types_.end());
-        auto const type  = uint32_t(std::distance(types_.begin(), it));
+        auto const type = uint32_t(std::distance(types_.begin(), it));
         return allocInternal(type);
     }
 
     SHandle allocInternal(uint32_t type);
 
-    void addBinding(SHandle src, SHandle target, CAbstractBindingPtr binding);
+    template <typename T>
+    void addBinding(SHandle src, SHandle target)
+    {
+        //        addBindingInternal(src, target, bindingFactory_.getBinding<T>());
+        addBindingInternal(src, target, std::make_unique<T>());
+    }
+
+    void addHandler(SHandle h, std::unique_ptr<CAbstractDataHandler> handler);
+
+    template <typename T, typename THandler>
+    void addHandlerFunctor(SHandle h, THandler f)
+    {
+        addHandler(h, std::make_unique<CDataHandlerCallFunctor<THandler, T>>(std::move(f)));
+    }
 
     void *getStorage(SHandle const &handle);
 
@@ -268,7 +431,8 @@ public:
     template <typename T>
     inline T const &get(SHandle const &handle)
     {
-        return *reinterpret_cast<T const *>(getStorage(handle));
+        auto *v = reinterpret_cast<T const *>(getStorage(handle));
+        return *v;
     }
 
     template <typename T>
@@ -278,9 +442,21 @@ public:
         updateBindings(handle);
     }
 
+    template <typename T>
+    inline void set(SHandle const &handle, T const &v)
+    {
+        *(reinterpret_cast<T *>(getStorage(handle))) = v;
+        updateBindings(handle);
+    }
+
 private:
+    void addBindingInternal(SHandle src, SHandle target, std::unique_ptr<CAbstractBinding> binding);
 
     TTypes types_;
+
+    std::vector<SHandle> tmpVec_;
+    std::deque<SHandle> tmpDeque_;
+    //    CBindingFactory bindingFactory_;
 };
 
 template <typename T>
@@ -357,9 +533,38 @@ public:
         CDataGroups::getSingleton().set(handle_, std::move(v));
     }
 
+    void set(T const &v)
+    {
+        CDataGroups::getSingleton().set(handle_, v);
+    }
+
     operator SHandle()
     {
         return handle_;
+    }
+
+    T const &operator*()
+    {
+        return get();
+    }
+
+private:
+    SHandle handle_;
+};
+
+class CVariant
+{
+public:
+    template <typename T>
+    explicit CVariant(T const &v)
+        : handle_(CDataGroups::getSingleton().alloc<T>)
+    {
+    }
+
+    template <typename T>
+    explicit CVariant(T &&v)
+        : handle_(CDataGroups::getSingleton().alloc<T>)
+    {
     }
 
 private:
@@ -372,5 +577,14 @@ CValue<T> allocValue(T &&v = T())
     auto &groups = CDataGroups::getSingleton();
     CValue<T> value(groups.alloc<T>());
     value.set(std::move(v));
+    return value;
+}
+
+template <typename T>
+CValue<T> introfumbleValue(SHandle h)
+{
+    auto &groups = CDataGroups::getSingleton();
+    groups.incRefcount(h);
+    CValue<T> value(h);
     return value;
 }

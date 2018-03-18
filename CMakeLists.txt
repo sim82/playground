@@ -3,11 +3,13 @@
 # cmake  -DCMAKE_C_COMPILER=/usr/lib/clang-analyzer/scan-build/ccc-analyzer -DCMAKE_CXX_COMPILER=/usr/lib/clang-analyzer/scan-build/c++-analyzer ..
 # scan-build -o static_analysis_results make
 
-
 cmake_minimum_required(VERSION 2.8)
 #SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -Wno-mismatched-tags  -std=c++0x")
 SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall  -std=c++1y")
 
+if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fsanitize=address")
+endif()
 
 LINK_DIRECTORIES( /usr/lib/llvm )
 

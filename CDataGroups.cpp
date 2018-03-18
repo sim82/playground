@@ -12,13 +12,13 @@
  *  for more details.
  */
 
-
 #include "CDataGroups.h"
-
+#include <algorithm>
 
 using TFromHook = boost::intrusive::member_hook<CAbstractBinding, TListMemberHook, &CAbstractBinding::fromHook_>;
 using TToHook   = boost::intrusive::member_hook<CAbstractBinding, TListMemberHook, &CAbstractBinding::toHook_>;
-
+using TDataHandlerHook =
+    boost::intrusive::member_hook<CAbstractDataHandler, TListMemberHook, &CAbstractDataHandler::hook_>;
 
 size_t align(size_t n, size_t a)
 {
@@ -159,12 +159,24 @@ public:
     using TIterator = typename TFromList::iterator;
     using TRange    = std::pair<TIterator, TIterator>;
 
+    using TDataHandlerList =
+        boost::intrusive::list<CAbstractDataHandler, TDataHandlerHook, boost::intrusive::constant_time_size<false>>;
+
+    using TDataHandlerInterator = typename TDataHandlerList::iterator;
+    using TDataHandlerRange     = std::pair<TDataHandlerInterator, TDataHandlerInterator>;
+
     TRange rangeForSource(uint32_t src)
     {
         auto &links = bindings2_.at(src);
         return TRange(links.fromList_.begin(), links.fromList_.end());
 
         //        return TRange(bindings_.lower_bound(src), bindings_.upper_bound(src));
+    }
+
+    TDataHandlerRange dataHandlerRangeFor(uint32_t src)
+    {
+        auto &links = bindings2_.at(src);
+        return TDataHandlerRange(links.handlerList_.begin(), links.handlerList_.end());
     }
 
     void addBindingFrom(uint32_t srcIndex, CAbstractBinding *binding)
@@ -177,16 +189,22 @@ public:
         bindings2_.at(targetIndex).toList_.push_back(*binding);
     }
 
+    void addHandler(uint32_t index, CAbstractDataHandler *handler)
+    {
+        bindings2_.at(index).handlerList_.push_back(*handler);
+    }
+
     void setSize(size_t s)
     {
         bindings2_.resize(s);
     }
 
-    struct SBindingDisposer
+    template <typename T>
+    struct SDisposer
     {
-        void operator()(CAbstractBinding *binding)
+        void operator()(T *ptr)
         {
-            delete binding;
+            delete ptr;
         }
     };
 
@@ -199,13 +217,15 @@ public:
         {
             it->toHook_.unlink();
         }
-        links.fromList_.clear_and_dispose(SBindingDisposer());
+        links.fromList_.clear_and_dispose(SDisposer<CAbstractBinding>());
 
         for (auto it = links.toList_.begin(), eit = links.toList_.end(); it != eit; ++it)
         {
             it->fromHook_.unlink();
         }
-        links.toList_.clear_and_dispose(SBindingDisposer());
+        links.toList_.clear_and_dispose(SDisposer<CAbstractBinding>());
+
+        links.handlerList_.clear_and_dispose(SDisposer<CAbstractDataHandler>());
     }
 
 private:
@@ -215,6 +235,7 @@ private:
     {
         TFromList fromList_;
         TToList toList_;
+        TDataHandlerList handlerList_;
     };
 
     std::vector<SBindingLinks> bindings2_;
@@ -226,8 +247,6 @@ CDataGroups &CDataGroups::getSingleton()
     return groups;
 }
 
-
-
 void CDataGroups::addTypeInternal(std::unique_ptr<ITypeSupport> typeSupport)
 {
     types_.emplace_back(SType{typeSupport->getTypeIndex(),
@@ -237,7 +256,7 @@ void CDataGroups::addTypeInternal(std::unique_ptr<ITypeSupport> typeSupport)
 
 SHandle CDataGroups::allocInternal(uint32_t type)
 {
-    auto & typeRec = types_.at(type);
+    auto &typeRec = types_.at(type);
 
     auto const index = uint32_t(typeRec.data->getUnreferenced());
     typeRec.data->incRefcount(index);
@@ -247,70 +266,135 @@ SHandle CDataGroups::allocInternal(uint32_t type)
     return SHandle{type, index};
 }
 
-void CDataGroups::addBinding(SHandle src, SHandle target, CAbstractBindingPtr binding)
+void CDataGroups::addHandler(SHandle h, std::unique_ptr<CAbstractDataHandler> handler)
 {
-    auto &srcType    = types_.at(src.type_);
-    auto &targetType = types_.at(target.type_);
+    auto &type = types_.at(h.getType());
+    assert(type.type == handler->getType());
 
-    srcType.bindings->addBindingFrom(src.index_, binding.get());
-    targetType.bindings->addBindingTo(target.index_, binding.get());
+    type.bindings->addHandler(h.getIndex(), handler.get());
+    handler.release();
+}
+
+void CDataGroups::addBindingInternal(SHandle src, SHandle target, std::unique_ptr<CAbstractBinding> binding)
+{
+    auto &srcType    = types_.at(src.getType());
+    auto &targetType = types_.at(target.getType());
+
+#ifndef NDEBUG
+    auto typePair = binding->getTypes();
+    assert(srcType.type == typePair.first);
+    assert(targetType.type == typePair.second);
+#endif
+
+    srcType.bindings->addBindingFrom(src.getIndex(), binding.get());
+    targetType.bindings->addBindingTo(target.getIndex(), binding.get());
     binding->setTarget(target);
+
+    binding->apply(getStorage(src), getStorage(target));
     binding.release();
 }
 
 void *CDataGroups::getStorage(const SHandle &handle)
 {
-    auto &type = types_.at(handle.type_);
-    return (*type.data)[handle.index_];
+    auto &type = types_.at(handle.getType());
+    return (*type.data)[handle.getIndex()];
 }
 
 void CDataGroups::updateBindings(const SHandle &handle)
 {
-    std::deque<SHandle> q{handle};
-    //        std::unordered_set<SHandle, SHandleHash /*, SHandleEqual*/> handles;
+    tmpDeque_.clear();
+    tmpVec_.clear();
 
+    std::deque<SHandle> &q = tmpDeque_;
+    q.push_back(handle);
+
+//    using TCycleCheckSet = std::unordered_set<SHandle, SHandleHash /*, SHandleEqual*/>;
+//    std::unique_ptr<TCycleCheckSet> cycleCheckSet;
+
+    std::vector<SHandle> &handles = tmpVec_;
+
+    size_t numBindings               = 0;
+    size_t const cycleCheckThreshold = 200000;
+
+//    size_t qReadPos = 0
     while (!q.empty())
     {
         SHandle const &f = q.front();
-        //            handles.emplace(f);
+        handles.emplace_back(f);
 
-        auto &type       = types_.at(f.type_);
-        auto const range = type.bindings->rangeForSource(f.index_);
+        auto &type       = types_.at(f.getType());
+        auto const range = type.bindings->rangeForSource(f.getIndex());
 
         for (auto it = range.first; it != range.second; ++it)
         {
             auto const &target = it->getTarget();
-            //                if (handles.find(target) != handles.end())
-            //                {
-            //                    std::cout << "cycle\n";
-            //                    continue;
-            //                }
+
 #if 1
-            auto &type1 = types_.at(f.type_);
-            auto &type2 = types_.at(target.type_);
-            it->apply((*type1.data)[f.index_], (*type2.data)[target.index_]);
+            auto &type1 = types_.at(f.getType());
+            auto &type2 = types_.at(target.getType());
+            it->apply((*type1.data)[f.getIndex()], (*type2.data)[target.getIndex()]);
 #else
             it->apply(getStorage(f), getStorage(target));
 #endif
+            ++numBindings;
+            if (numBindings >= cycleCheckThreshold)
+            {
+                std::sort(handles.begin(), handles.end());
+                if( std::adjacent_find(handles.begin(), handles.end()) != handles.end())
+                {
+                    std::cout << "cycle\n";
+                    return;
+                }
+                numBindings = 0;
+            }
+
             q.push_back(target);
         }
         q.pop_front();
+    }
+
+    for (auto const &h : handles)
+    {
+        auto &type = types_.at(h.getType());
+
+        auto range = type.bindings->dataHandlerRangeFor(h.getIndex());
+        for (auto it = range.first; it != range.second; ++it)
+        {
+            it->dataChanged();
+        }
     }
 }
 
 void CDataGroups::incRefcount(const SHandle &handle)
 {
-    auto &type = types_.at(handle.type_);
-    type.data->incRefcount(handle.index_);
+    auto &type = types_.at(handle.getType());
+    type.data->incRefcount(handle.getIndex());
 }
 
 void CDataGroups::decRefcount(const SHandle &handle)
 {
-    auto &type   = types_.at(handle.type_);
-    bool lastRef = type.data->decRefcount(handle.index_);
+    auto &type   = types_.at(handle.getType());
+    bool lastRef = type.data->decRefcount(handle.getIndex());
     if (lastRef)
     {
-        type.typeSupport->destruct((*type.data)[handle.index_]);
-        type.bindings->removeAll(handle.index_);
+        type.typeSupport->destruct((*type.data)[handle.getIndex()]);
+        type.bindings->removeAll(handle.getIndex());
     }
 }
+
+// std::shared_ptr<CAbstractBinding> CBindingFactory::getBindingInternal(std::type_index type,
+// std::shared_ptr<CAbstractBinding> init)
+//{
+//    auto it = bindings_.find(type);
+//    if (it != bindings_.end())
+//    {
+//        return it->second;
+//    }
+
+//    if (!init)
+//    {
+//        return {};
+//    }
+//    return bindings_.emplace(type, init).first->second;
+
+//}
